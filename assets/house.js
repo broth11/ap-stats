@@ -152,7 +152,7 @@
   function stdList(arr, open) {
     if (!arr.length) return '<p class="none">' + EMPTY + '</p>';
     return '<dl class="stds">' + arr.map(function (s) {
-      return '<dt>' + esc(s.code || '') + '</dt><dd>' + fmt(s.text || '') + ekHtml(s, open) + '</dd>';
+      return '<dt>' + esc(s.code || '') + '</dt><dd>' + fmt(s.text || '') + '</dd>' + ekHtml(s, open);
     }).join('') + '</dl>';
   }
 

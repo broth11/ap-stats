@@ -119,11 +119,16 @@ button.fbtn{width:100%;text-align:left}
 @media(max-width:760px){.qr{width:83px;height:83px;top:10px;right:10px}.card-top,.lr-head{padding-right:104px}}
 @media(prefers-reduced-motion:reduce){.qr{transition:none}}
 
-.ek{margin-top:8px}.ek summary{cursor:pointer;font:800 12px var(--mono)}
-.ek .lo{margin:12px 0 4px;font-weight:700}.ek .lo b{font:800 12px var(--mono);margin-right:4px}
-.eks{list-style:none;padding:0;display:grid;gap:8px}.eks li{display:grid;grid-template-columns:62px 1fr;gap:10px}
-.eks .ekc{font:800 11px var(--mono);padding-top:2px}.eks img{max-width:100%;height:auto;display:block}
-@media(max-width:600px){.eks li{grid-template-columns:1fr;gap:0}}
+.stds .ek { grid-column: 1 / -1; margin-top: 0; }
+.ek summary { cursor: pointer; font: 700 12.5px var(--mono); }
+.ek .lo { margin: 12px 0 4px 20%; font-weight: 700; }
+.ek .lo b { font: 700 12px var(--mono); margin-right: 4px; }
+.eks { list-style: none; padding: 0; margin: 0 0 0 40%; display: grid; gap: 8px; }
+.eks li { display: block; padding: 0; }
+.eks li::before { display: none !important; content: none !important; }
+.eks .ekc { display: block; font: 700 11.5px var(--mono); margin-bottom: 1px; }
+.eks img { max-width: 100%; height: auto; display: block; }
+@media (max-width: 600px) { .ek .lo { margin-left: 8%; } .eks { margin-left: 16%; } }
 </style></head>
 <body>
 <div class="topbar"><div class="topbar-in"><span class="course">AP Statistics</span><nav aria-label="Units"><button type="button" class="u " data-href="unit-1.html">1</button><button type="button" class="u " data-href="unit-2.html">2</button><button type="button" class="u " data-href="unit-3.html">3</button><button type="button" class="u " data-href="unit-4.html">4</button><button type="button" class="u on" data-href="unit-5.html">5</button></nav></div></div>
@@ -145,7 +150,7 @@ function pad(n){return (n<10?'0':'')+n;}
 function chips(l){return l.standards.map(function(s){return '<span class="chip">'+esc(s.code.replace('CED ',''))+'</span>';}).join('');}
 function list(a){return a&&a.length?'<ul>'+a.map(function(x){return '<li>'+fmt(x)+'</li>';}).join('')+'</ul>':'<p class="none">Nothing here yet</p>';}
 function ekh(s,open){if(!s.ek||!s.ek.length)return '';var n=s.ek.reduce(function(a,lo){return a+lo.eks.length;},0);return '<details class="ek"'+(open?' open':'')+'><summary>Essential knowledge ('+n+')</summary>'+s.ek.map(function(lo){return '<div class="lo"><b>'+esc(lo.code)+'</b> '+esc(lo.text)+'</div><ul class="eks">'+lo.eks.map(function(e){return '<li><span class="ekc">'+esc(e.code)+'</span>'+(e.img?'<img src="'+e.img+'" alt="'+esc(e.code)+'">':'<span>'+esc(e.text)+'</span>')+'</li>';}).join('')+'</ul>';}).join('')+'</details>';}
-function std(l,open){return l.standards.length?'<dl class="stds">'+l.standards.map(function(s){return '<dt>'+esc(s.code.replace('CED ',''))+'</dt><dd>'+fmt(s.text)+ekh(s,open)+'</dd>';}).join('')+'</dl>':'<p class="none">Nothing here yet</p>';}
+function std(l,open){return l.standards.length?'<dl class="stds">'+l.standards.map(function(s){return '<dt>'+esc(s.code.replace('CED ',''))+'</dt><dd>'+fmt(s.text)+'</dd>'+ekh(s,open);}).join('')+'</dl>':'<p class="none">Nothing here yet</p>';}
 function btns(items){return items.map(function(f){return '<a class="fbtn" href="'+esc(f.h)+'" target="_blank" rel="noopener noreferrer" title="'+esc(f.l)+'">'+icon(f.k)+'<span>'+esc(f.l)+(f.x?' <em>'+esc(f.x)+'</em>':'')+'</span></a>';}).join('');}
 function col(t,items){return '<div class="col"><h3>'+t+'</h3>'+(items.length?'<div class="fbtns">'+btns(items)+'</div>':'<p class="none">None</p>')+'</div>';}
 function cols(l){return '<div class="cols">'+col('Files',l.files.F)+col('Videos',l.files.V)+col('Links',l.files.K)+'</div>';}
@@ -239,7 +244,7 @@ state=read(); draw();
   "overview": "Describes the relationship between two quantitative variables with scatterplots, correlation and linear regression models."
  },
  "rootPrefix": "",
- "updated": "2026-11-19T19:31:53",
+ "updated": "2026-11-19T19:38:38",
  "categories": [
   "understandings",
   "misconceptions",
