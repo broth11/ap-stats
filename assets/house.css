@@ -259,12 +259,12 @@ body.zoomed .board .c-title { view-transition-name: none; }
 
 .stds .ek { grid-column: 1 / -1; margin-top: 0; }
 .ek summary { cursor: pointer; font: 700 12.5px var(--mono); }
-.ek .lo { margin: 12px 0 4px 20%; font-weight: 700; }
+.ek .lo { margin: 12px 0 4px 5%; font-weight: 700; }
 .ek .lo b { font: 700 12px var(--mono); margin-right: 4px; }
-.eks { list-style: none; padding: 0; margin: 0 0 0 40%; display: grid; gap: 8px; }
+.eks { list-style: none; padding: 0; margin: 0 0 0 10%; display: grid; gap: 8px; }
 .eks li { display: block; padding: 0; }
 .eks li::before { display: none !important; content: none !important; }
 .eks .ekc { display: block; font: 700 11.5px var(--mono); margin-bottom: 1px; }
 .eks img { max-width: 100%; height: auto; display: block; }
-@media (max-width: 600px) { .ek .lo { margin-left: 8%; } .eks { margin-left: 16%; } }
+@media (max-width: 600px) { .ek .lo { margin-left: 3%; } .eks { margin-left: 6%; } }
 a.cedlink { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
