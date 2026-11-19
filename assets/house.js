@@ -137,10 +137,22 @@
     if (!arr.length) return '<p class="none">' + EMPTY + '</p>';
     return '<ul class="' + (cls || 'pts') + '">' + arr.map(function (x) { return '<li>' + fmt(text(x)) + '</li>'; }).join('') + '</ul>';
   }
-  function stdList(arr) {
+  function ekHtml(s, open) {
+    if (!s.ek || !s.ek.length) return '';
+    var n = s.ek.reduce(function (a, lo) { return a + lo.eks.length; }, 0);
+    return '<details class="ek"' + (open ? ' open' : '') + '><summary>Essential knowledge (' + n + ')</summary>' +
+      s.ek.map(function (lo) {
+        return '<div class="lo"><b>' + esc(lo.code) + '</b> ' + esc(lo.text) + '</div><ul class="eks">' +
+          lo.eks.map(function (e) {
+            return '<li><span class="ekc">' + esc(e.code) + '</span>' +
+              (e.img ? '<img src="' + e.img + '" alt="' + esc(e.code) + '">' : '<span>' + esc(e.text) + '</span>') + '</li>';
+          }).join('') + '</ul>';
+      }).join('') + '</details>';
+  }
+  function stdList(arr, open) {
     if (!arr.length) return '<p class="none">' + EMPTY + '</p>';
     return '<dl class="stds">' + arr.map(function (s) {
-      return '<dt>' + esc(s.code || '') + '</dt><dd>' + fmt(s.text || '') + '</dd>';
+      return '<dt>' + esc(s.code || '') + '</dt><dd>' + fmt(s.text || '') + ekHtml(s, open) + '</dd>';
     }).join('') + '</dl>';
   }
 
@@ -221,7 +233,7 @@
   function lensRow(l, key) {
     var body;
     if (key === 'resources') body = '<div class="pair">' + resPair(l) + '</div>';
-    else if (key === 'standards') body = stdList(items(l, key));
+    else if (key === 'standards') body = stdList(items(l, key), true);
     else if (off(l, key)) body = '<p class="none">' + (STUDENT ? 'Not part of this lesson' : 'Switched off for this lesson') + '</p>';
     else body = list(items(l, key), 'pts cols');
     return '<li class="row is-lens" data-id="' + l.id + '">' + titleCell(l) +

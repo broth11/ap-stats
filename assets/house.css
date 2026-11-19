@@ -256,3 +256,13 @@ body.zoomed .board .c-title { view-transition-name: none; }
   .fbtn { min-height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) { .fbtn, .fbtn:hover { transition: none; transform: none; } }
+
+.ek { margin-top: 8px; }
+.ek summary { cursor: pointer; font: 500 12.5px var(--mono); color: var(--accent); }
+.ek .lo { margin: 12px 0 4px; font-weight: 600; color: var(--ink); }
+.ek .lo b { font: 500 12px var(--mono); color: var(--accent); margin-right: 4px; }
+.eks { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; }
+.eks li { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 10px; }
+.eks .ekc { font: 500 11.5px var(--mono); color: var(--accent); padding-top: 2px; }
+.eks img { max-width: 100%; height: auto; display: block; }
+.s-side .eks li { grid-template-columns: 1fr; gap: 0; }
