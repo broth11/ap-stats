@@ -1,0 +1,1208 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Unit 1 · Exploring One-Variable Data and Collecting Data</title>
+<style>button{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:pointer;text-align:left}
+
+:root{--ink:#0b0b0b;--paper:#f6f3ec;--grid:#e4dfd2;--orange:#ff4d00;--blue:#4b5cff;--indigo:#6366f1;--indigo-h:#4f46e5;--sh:4px 4px 0 var(--ink);--sans:ui-sans-serif,-apple-system,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box;margin:0}
+body{font:15px/1.5 var(--sans);color:var(--ink);background:var(--paper);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px;padding:28px 16px 64px}
+.wrap{max-width:1080px;margin:0 auto}
+.hero{position:relative;background:var(--orange);background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 10px,transparent 10px 20px);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);padding:26px 28px 24px;margin-bottom:34px}
+.hero .eyebrow{font:800 13px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#fff}
+.hero h1{font:900 clamp(30px,5vw,54px)/1.02 var(--sans);text-transform:uppercase;letter-spacing:.01em;color:#fff;margin:8px 0 12px;max-width:16ch;text-shadow:3px 3px 0 var(--ink)}
+.hero p{max-width:62ch;background:#fff;border:2px solid var(--ink);box-shadow:var(--sh);padding:10px 14px;font-weight:500}
+.sticker{position:absolute;right:22px;top:20px;background:#fff;border:2px solid var(--ink);box-shadow:var(--sh);padding:6px 14px;font:900 15px var(--sans);letter-spacing:.1em;text-transform:uppercase;transform:rotate(4deg)}
+.units{display:flex;gap:8px;margin:0 0 26px;flex-wrap:wrap}
+.units a{font:800 13px var(--mono);border:2px solid var(--ink);background:#fff;padding:6px 14px;box-shadow:3px 3px 0 var(--ink);color:var(--ink);text-decoration:none;transition:transform .15s,box-shadow .15s}
+.units a:hover{transform:translate(-1px,-1px);box-shadow:5px 5px 0 var(--ink)}
+.units a.on{background:var(--blue);color:#fff}
+.card{background:#fff;border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);padding:20px 22px 18px;margin-bottom:34px;background-image:linear-gradient(#f1eee6 1px,transparent 1px);background-size:100% 26px}
+.card-top{display:grid;grid-template-columns:auto 1fr;gap:18px;align-items:center}
+.num{font:900 44px/1 var(--sans);background:var(--blue);color:#fff;border:3px solid var(--ink);box-shadow:var(--sh);padding:8px 12px;min-width:76px;text-align:center}
+h2{font:900 clamp(19px,2.4vw,26px)/1.1 var(--sans);text-transform:uppercase;letter-spacing:.01em}
+.chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px}
+.lab{font:800 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#555;margin-right:2px}
+.chip{font:800 12px var(--mono);border:2px solid var(--ink);background:#e9ecff;padding:1px 8px;box-shadow:2px 2px 0 var(--ink)}
+.card-body{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.7fr);gap:30px;margin-top:18px}
+h3{font:800 11.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:#555;margin-bottom:7px}
+ul{list-style:none;padding:0}li{position:relative;padding-left:20px;margin-bottom:6px;font-size:14px}
+li::before{content:"";position:absolute;left:0;top:.38em;width:9px;height:9px;background:var(--orange);border:2px solid var(--ink)}
+.card-body p{font-size:14.5px}
+code{font:.92em var(--mono);background:#eee;padding:0 4px}
+.cut{height:0;margin:18px 0 14px;border-top:2px dashed #999}
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}.col h3{margin-bottom:10px}.fbtns{display:grid;grid-template-columns:1fr;gap:10px}
+.fbtn{display:flex;align-items:center;gap:10px;min-height:42px;padding:8px 12px;font:800 13px/1.2 var(--sans);text-transform:uppercase;letter-spacing:.03em;color:var(--ink);text-decoration:none;background:#fff;border:2px solid var(--ink);border-radius:4px;box-shadow:var(--sh);transition:transform .12s,box-shadow .12s,background .12s;min-width:0}
+.fbtn span{min-width:0;overflow-wrap:anywhere}
+.fbtn em{font:700 10px var(--mono);font-style:normal;color:#666}
+.fbtn svg{flex:none;color:var(--blue)}
+.fbtn:hover{transform:translate(2px,2px);box-shadow:2px 2px 0 var(--ink);background:var(--blue);color:#fff}
+.fbtn:hover svg{color:#fff}.fbtn:active{transform:translate(4px,4px);box-shadow:0 0 0 var(--ink)}
+.none{color:#777;font-size:13px}
+.foot{font:700 12px var(--mono);color:#555;text-align:center;margin-top:10px}
+@media(max-width:760px){.cols{grid-template-columns:1fr;gap:16px}.card-top{grid-template-columns:auto 1fr}.card-body{grid-template-columns:1fr;gap:16px}.fbtns{grid-template-columns:1fr}.fbtn{min-height:46px}.sticker{position:static;display:inline-block;margin-bottom:12px}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:.01s!important}}
+body{padding-top:0}
+.topbar{position:sticky;top:0;z-index:20;background:var(--ink);border-bottom:3px solid var(--ink);margin:0 -16px 26px;padding:0 16px}
+.topbar-in{max-width:1080px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 0}
+.topbar .course{font:900 14px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#fff;margin-right:auto}
+.topbar nav{display:flex;gap:8px}
+.topbar .u{font:800 13px var(--mono);min-width:44px;text-align:center;border:2px solid #fff;background:#fff;color:var(--ink);padding:5px 12px;text-decoration:none;box-shadow:3px 3px 0 var(--orange);transition:transform .12s,box-shadow .12s}
+.topbar .u:hover{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--orange)}
+.topbar .u.on{background:var(--blue);color:#fff}
+.part{display:flex;align-items:stretch;margin:44px 0 22px;border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);background:#fff;scroll-margin-top:84px}
+.part .code{font:900 34px/1 var(--sans);background:var(--orange);color:#fff;padding:12px 18px;border-right:3px solid var(--ink);display:flex;align-items:center;text-shadow:2px 2px 0 var(--ink)}
+.part .pt{padding:10px 18px;display:flex;flex-direction:column;justify-content:center}
+.part .pt b{font:900 clamp(17px,2.2vw,24px)/1.1 var(--sans);text-transform:uppercase}
+.part .pt span{font:800 11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#555;margin-top:3px}
+.jump{display:flex;gap:8px;margin:0 0 -18px;flex-wrap:wrap}
+.jump button{font:800 13px var(--mono);border:2px solid var(--ink);background:#fff;padding:5px 12px;box-shadow:3px 3px 0 var(--ink);color:var(--ink);text-decoration:none}
+.jump button:hover{background:var(--blue);color:#fff}
+
+div.card-top{cursor:pointer}
+div.card-top:hover h2,.lr-head:hover h2{color:var(--blue)}
+.code-tag{display:block;font:800 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--blue);margin-bottom:3px}
+.card .chips{margin:12px 0 0}
+div.blk{display:block;cursor:pointer;padding:8px 10px;margin:-8px -10px;border:2px solid transparent;transition:border-color .12s,background .12s}
+div.blk:hover{border-color:var(--ink);background:#fffbe6}
+.more{font:800 11px var(--mono);color:#555;margin-top:2px}
+.lens{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 24px}
+.tab{font:800 13px var(--mono);border:2px solid var(--ink);background:#fff;padding:6px 13px;box-shadow:3px 3px 0 var(--ink);color:var(--ink);text-decoration:none;transition:transform .12s,box-shadow .12s,background .12s}
+.tab:hover{transform:translate(2px,2px);box-shadow:1px 1px 0 var(--ink)}
+.tab.on{background:var(--blue);color:#fff}
+.jump{margin:0 0 -18px}
+.lr-head{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center;cursor:pointer;margin-bottom:14px}
+.lr-head .num{font-size:30px;min-width:60px;padding:6px 8px}
+.lrow{padding:16px 20px;box-shadow:6px 6px 0 var(--ink);margin-bottom:26px}
+.lr-body ul{columns:2;column-gap:36px}.lr-body li{break-inside:avoid}
+.lr-body .cols{margin-top:2px}
+.stds{display:grid;grid-template-columns:62px 1fr;gap:8px 12px}
+.stds dt{font:800 12px var(--mono);border:2px solid var(--ink);background:#e9ecff;padding:1px 6px;height:fit-content;text-align:center;box-shadow:2px 2px 0 var(--ink)}
+.stds dd{font-size:13.5px}
+body.locked{overflow:hidden}
+.sheet{position:fixed;inset:0;z-index:40;overflow:auto;background:var(--paper);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:24px 24px;padding:0 16px 60px;outline:none}
+.sheet-bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 0}
+.back{font:800 13px var(--mono);border:2px solid var(--ink);background:#fff;padding:6px 12px;box-shadow:3px 3px 0 var(--ink);color:var(--ink);text-decoration:none}
+.back:hover{background:var(--blue);color:#fff}
+.pager{display:flex;gap:8px}.pager button,.pager .off{font:800 13px var(--mono);border:2px solid var(--ink);background:#fff;padding:6px 12px;box-shadow:3px 3px 0 var(--ink);color:var(--ink);text-decoration:none}
+.pager .off{opacity:.35;box-shadow:none}.pager button:hover{background:var(--blue);color:#fff}
+.s-head{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center;background:var(--orange);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);padding:20px 24px;margin:8px 0 30px}
+.s-head .code-tag{color:#fff}
+.s-head h2{font:900 clamp(24px,3.6vw,42px)/1.05 var(--sans);color:#fff;text-shadow:3px 3px 0 var(--ink)}
+.s-head .num{font-size:48px;background:#fff;color:var(--ink)}
+.s-grid{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:30px;align-items:start;margin-bottom:26px}
+.quad{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin:22px 0}
+.sec{background:#fff;border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);padding:16px 18px;margin-bottom:0}
+.s-main>.sec{margin-bottom:0}.s-main>.sec+.quad+.sec{margin-top:0}
+.sec.focus{outline:4px solid var(--blue);outline-offset:3px}
+.s-side .sec{margin-bottom:0}
+@media(max-width:860px){.s-grid{grid-template-columns:1fr}.quad{grid-template-columns:1fr}.lr-body ul{columns:1}.s-head{grid-template-columns:1fr}}
+
+a,a:hover,a:focus,a:visited,a:active{text-decoration:none!important}
+
+*{text-decoration:none!important;text-decoration-color:transparent!important}
+
+button.fbtn{width:100%;text-align:left}
+
+.card{position:relative}
+.card-top,.lr-head{padding-right:128px}
+.qr{position:absolute;top:14px;right:16px;width:102px;height:102px;padding:0;background:#fff;border:3px solid var(--ink);box-shadow:var(--sh);cursor:pointer;z-index:2;transition:transform .12s}
+.qr:hover{transform:translate(-2px,-2px)}
+.qr:focus-visible{outline:3px solid var(--blue);outline-offset:3px}
+.qr svg{display:block;width:100%;height:100%}
+.qrm{position:fixed;inset:0;z-index:80;background:rgba(11,11,11,.72);display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer}
+.qrm-card{width:calc(min(68vh,80vw) + 52px);cursor:default;background:#fff;border:4px solid var(--ink);box-shadow:10px 10px 0 var(--ink);padding:22px;display:grid;gap:16px;max-width:96vw;max-height:96vh}
+.qrm-big{width:min(68vh,80vw);aspect-ratio:1}
+.qrm-big svg{display:block;width:100%;height:100%}
+.qrm-cap{display:grid;gap:4px}
+.qrm-cap b{font:900 clamp(18px,3vh,30px)/1.1 var(--sans);text-transform:uppercase}
+.qrm-url{font:600 13px var(--mono);color:#555;word-break:break-all}
+@media(max-width:760px){.qr{width:83px;height:83px;top:10px;right:10px}.card-top,.lr-head{padding-right:104px}}
+@media(prefers-reduced-motion:reduce){.qr{transition:none}}
+</style></head>
+<body>
+<div class="topbar"><div class="topbar-in"><span class="course">AP Statistics</span><nav aria-label="Units"><button type="button" class="u on" data-href="unit-1.html">1</button><button type="button" class="u " data-href="unit-2.html">2</button><button type="button" class="u " data-href="unit-3.html">3</button><button type="button" class="u " data-href="unit-4.html">4</button><button type="button" class="u " data-href="unit-5.html">5</button></nav></div></div>
+<div id="app" class="wrap"></div>
+<script id="data" type="application/json">{"unit": 1, "title": "Exploring One-Variable Data and Collecting Data", "overview": "Describes the distribution of one categorical or quantitative variable, compares distributions, then moves to how data are collected: sampling methods and their problems, and experimental design.", "parts": [{"code": "1A", "title": "Exploring One-Variable Data"}, {"code": "1B", "title": "Collecting Data"}], "lessons": [{"id": "L1", "n": 1, "ln": 1, "code": "1.A.1", "part": "1A", "partTitle": "Exploring One-Variable Data", "title": "Populations, Samples, & Data", "summary": "Statistics is about reasoning with evidence, not just computing means and medians. You separate populations from samples, classify variables, and tell parameters from statistics. The activity starts with a World War II puzzle that has a surprising answer, then asks whether the data colleges use in recruiting emails can mislead.", "standards": [{"code": "CED 1.1", "text": "Introducing statistics: what can we learn from data"}, {"code": "CED 1.2", "text": "Variables"}], "skills": ["Write an investigative question and identify the population and sample.", "Classify variables as categorical or quantitative, and identify individuals."], "understandings": ["Statistics answers a question about a population using data from individuals.", "The type of variable decides which summaries and graphs are allowed."], "misconceptions": ["Numbers used as labels (zip codes, jersey numbers) are categorical, not quantitative.", "Confusing the individuals with the variables recorded on them."], "processes": ["State the question, identify individuals, then name each variable and its type."], "exam": ["Name the variable in context and say categorical or quantitative; a bare type earns nothing."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L1", "files": {"F": [{"l": "1.A.1.APStats.Handout", "h": "https://drive.google.com/file/d/1sdZFolhblKZcKaP_Fco-E2Tt07CYPDOH/view", "k": "page", "x": ""}, {"l": "1.A.1.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1-8CXJsZI5VFU7voE04P1DLFl-CGWKXc5/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=4-7iHgDKamQ", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.1", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=1", "k": "brain", "x": ""}, {"l": "Stats Hub 1.2", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=2", "k": "brain", "x": ""}, {"l": "Practice Library 1.A.1", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a01", "k": "brain", "x": ""}]}}, {"id": "L2", "n": 2, "ln": 2, "code": "1.A.2", "part": "1A", "partTitle": "Exploring One-Variable Data", "title": "Describing a Categorical Variable", "summary": "Relative frequencies, bar charts and pie charts describe how a categorical variable is spread across its categories. You calculate and interpret them and describe the trend you see. The activity looks at why more elite athletes are born between January and June, and asks you to explain it.", "standards": [{"code": "CED 1.3", "text": "Tabular representation and summary statistics for one categorical variable"}, {"code": "CED 1.4", "text": "Graphical representations for one categorical variable"}], "skills": ["Build frequency and relative frequency tables.", "Draw and read bar charts and compare categories with relative frequency."], "understandings": ["Relative frequency lets groups of different sizes be compared.", "A good graph shows the categories and the proportion in each without distortion."], "misconceptions": ["Using counts to compare groups of different sizes.", "Calling a bar chart a histogram, or leaving bars in an order that suggests a trend."], "processes": ["Count each category, divide by the total, then graph with labelled axes."], "exam": ["Compare using relative frequencies and name the categories in context."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L2", "files": {"F": [{"l": "1.A.2.APStats.Handout", "h": "https://drive.google.com/file/d/1BEhqbC6Cr-sor4p5Sqjk5fvib_TLu_lq/view", "k": "page", "x": ""}, {"l": "1.A.2.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/11uywzhrW2gQzxteq9ed5mtZnmoTBNyFn/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=B93gfiZsQDg", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.3", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=3", "k": "brain", "x": ""}, {"l": "Stats Hub 1.4", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=4", "k": "brain", "x": ""}, {"l": "Practice Library 1.A.2", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a11", "k": "brain", "x": ""}]}}, {"id": "L3", "n": 3, "ln": 3, "code": "1.A.3", "part": "1A", "partTitle": "Exploring One-Variable Data", "title": "Describing a Quantitative Variable", "summary": "Dotplots, stem-and-leaf plots and histograms show how a quantitative variable is distributed. You describe shape, center, spread and unusual features in context. The activity uses baseball team payrolls from the Moneyball season to show why Oakland's 2002 run was so unusual.", "standards": [{"code": "CED 1.5", "text": "Graphical representations for one quantitative variable"}, {"code": "CED 1.6", "text": "Descriptions for one quantitative variable distributions"}], "skills": ["Make and read dotplots, stemplots and histograms.", "Describe shape, center, variability and unusual features (SOCV) in context."], "understandings": ["A description has four parts: shape, center, variability, unusual features, all in context.", "Histogram bin width changes the look, not the data."], "misconceptions": ["Describing the graph (tall bar on the left) instead of the distribution.", "Calling a distribution skewed toward the side with the tail's opposite, mixing up skew direction."], "processes": ["Identify the overall pattern, then check the center, spread and any gaps or outliers."], "exam": ["Every description needs context and comparative language; a list of numbers is not a description."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L3", "files": {"F": [{"l": "1.A.3.APStats.Data", "h": "https://docs.google.com/spreadsheets/d/1EQWBP8FsXQy0r6bng4CAX2xRUJrkmzyIHDBqjcTCV5E/view", "k": "page", "x": "gsheet"}, {"l": "1.A.3.APStats.Data", "h": "https://drive.google.com/file/d/1v5g7So1yxYA0gmCe_n93S74XH0IiUx2l/view", "k": "page", "x": "xlsx"}, {"l": "1.A.3.APStats.Handout", "h": "https://drive.google.com/file/d/10yhSxg3PRsAGZNGhBwwRY5z4DXYR57zH/view", "k": "page", "x": ""}, {"l": "1.A.3.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1FZsBRoa28ZG_p1CxSPnROghm7aibyW1p/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=49LBE76yx7c", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.5", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=5", "k": "brain", "x": ""}, {"l": "Stats Hub 1.6", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=6", "k": "brain", "x": ""}, {"l": "Practice Library 1.A.3", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a21", "k": "brain", "x": ""}]}}, {"id": "L4", "n": 4, "ln": 4, "code": "1.A.4", "part": "1A", "partTitle": "Exploring One-Variable Data", "title": "Measures of Center & Spread", "summary": "The mean and median measure center, and the range, IQR, variance and standard deviation measure spread. You also use percentiles to place a value in a data set. The activity compares home prices from 1970 and 2024 to show wages have not kept pace, and asks how to preserve the American Dream.", "standards": [{"code": "CED 1.7", "text": "Summary statistics for one quantitative variable (center, spread, outliers)"}], "skills": ["Compute and interpret mean, median, standard deviation, IQR and range.", "Identify outliers with the 1.5 IQR rule and judge which summary suits the shape."], "understandings": ["Resistant measures (median, IQR) are preferred for skewed data or outliers.", "Standard deviation measures typical distance from the mean."], "misconceptions": ["Using the mean and standard deviation for a strongly skewed distribution.", "Interpreting standard deviation as the average of the values."], "processes": ["Enter data in lists, run 1-Var Stats, then apply the 1.5 IQR fences by hand."], "exam": ["Interpret the statistic in context, not just state it; justify the choice of center and spread with shape."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L4", "files": {"F": [{"l": "1.A.4.APStats.Handout", "h": "https://drive.google.com/file/d/16M5xU3XNPU5zaSnYa400psmHXtlOv5ZU/view", "k": "page", "x": ""}, {"l": "1.A.4.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1q3K0FUPHGKx3hi3q5GtF_vjZonBCng7_/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=U_hjKd8LBtg", "k": "video", "x": ""}, {"l": "Optional video (measures by hand)", "h": "https://www.youtube.com/watch?v=YhrCbU0ORsA", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.7", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=7", "k": "brain", "x": ""}, {"l": "Practice Library 1.A.4", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a31", "k": "brain", "x": ""}]}}, {"id": "L5", "n": 5, "ln": 5, "code": "1.A.5", "part": "1A", "partTitle": "Exploring One-Variable Data", "title": "Boxplots, Outliers, & Resistance", "summary": "The five-number summary builds boxplots and the 1.5 IQR rule flags outliers. You see how changing units affects summaries and which statistics resist outliers and skew. The activity asks how much money you will really make, and shows how easily a salary figure can mislead.", "standards": [{"code": "CED 1.7", "text": "Summary statistics for one quantitative variable (percentiles, z-scores)"}, {"code": "CED 1.8", "text": "Graphical representations of summary statistics"}], "skills": ["Draw and read boxplots using the five-number summary.", "Compute and interpret percentiles and z-scores."], "understandings": ["A boxplot shows spread through quartiles, and each section holds about a quarter of the data.", "A z-score counts standard deviations from the mean."], "misconceptions": ["Reading box length as the amount of data in it, or reading a boxplot's tall whisker as more data.", "Calling a z-score the percentile."], "processes": ["Find the five-number summary, mark fences, plot outliers separately, then draw whiskers to the last non-outlier."], "exam": ["Percentile and z-score interpretations need a full sentence in context."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L5", "files": {"F": [{"l": "1.A.5.APStats.Handout", "h": "https://drive.google.com/file/d/1aY1Aa3Gh_tg2OTg_khUYaHAUfL2OEgiJ/view", "k": "page", "x": ""}, {"l": "1.A.5.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1ACjzpzxKKRgZDgEauYfTAdRYhRrGwHdu/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=jy6SqcuHDLA", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.7", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=7", "k": "brain", "x": ""}, {"l": "Stats Hub 1.8", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=8", "k": "brain", "x": ""}, {"l": "Practice Library 1.A.5", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a41", "k": "brain", "x": ""}]}}, {"id": "L6", "n": 6, "ln": 6, "code": "1.A.6", "part": "1A", "partTitle": "Exploring One-Variable Data", "title": "Comparing Graphs & Z-Scores", "summary": "Comparing distributions means addressing shape, center and spread together, and z-scores let you compare values from different scales. You use both to compare players from different basketball eras. The activity is a debate on who is the greatest NBA scorer of all time, settled with data.", "standards": [{"code": "CED 1.9", "text": "Comparisons of the distributions for one quantitative variable"}], "skills": ["Compare two or more distributions on shape, center, spread and outliers.", "Choose a graph that supports the comparison."], "understandings": ["Comparison needs both distributions addressed in the same sentence.", "Side-by-side graphs on a common scale make shape, center and spread directly comparable."], "misconceptions": ["Describing each group separately with no comparing words.", "Comparing only the centers."], "processes": ["Draw on a shared axis, then write one comparing sentence each for shape, center, spread and outliers."], "exam": ["Use words like higher, more variable, both skewed right; this is where FRQ marks are lost."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L6", "files": {"F": [{"l": "1.A.6.APStats.Data", "h": "https://docs.google.com/spreadsheets/d/1d-dEitDtn2qt2Hq50yDS7hT1VzUSY9UkChQPder99w4/view", "k": "page", "x": "gsheet"}, {"l": "1.A.6.APStats.Data", "h": "https://drive.google.com/file/d/1ycbnpouJ3R7zCEXFX4Bib85J2CngmFOJ/view", "k": "page", "x": "xlsx"}, {"l": "1.A.6.APStats.Handout", "h": "https://drive.google.com/file/d/1wq0rOtkbwLdhWFGEDVo9JwsTomG5R5Qn/view", "k": "page", "x": ""}, {"l": "1.A.6.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/19dfuhtutcGreSz-L_S2HiVHnYopplq7N/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=g0U-eOE9n2s", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.9", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=9", "k": "brain", "x": ""}, {"l": "Practice Library 1.A.6", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a51", "k": "brain", "x": ""}]}}, {"id": "L7", "n": 7, "ln": 1, "code": "1.B.1", "part": "1B", "partTitle": "Collecting Data", "title": "Types of Studies", "summary": "The way a study is designed decides what conclusions it can support. You compare observational studies and experiments, spot confounding variables, and judge when causal claims and generalizing are allowed. The activity uses Covid-19 data to ask how we know vaccines work.", "standards": [{"code": "CED 1.10", "text": "The investigative question revisited and data collection"}], "skills": ["Choose a data collection method (survey, observational study, experiment) that fits the question.", "Define population, sample and parameter versus statistic."], "understandings": ["The way data are collected decides what conclusions are allowed.", "Only a randomized experiment can support cause and effect."], "misconceptions": ["Using observational data to claim causation.", "Mixing up parameter and statistic."], "processes": ["Match the question to the design, then state the population the conclusion applies to."], "exam": ["Conclusions must match the design: generalizing needs random sampling, causation needs random assignment."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L7", "files": {"F": [{"l": "1.B.1.APStats.Handout", "h": "https://drive.google.com/file/d/1_qZjRCe_MhtCVyNhASdZ2CH9IQ9LGOBe/view", "k": "page", "x": ""}, {"l": "1.B.1.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1BvqzaChMuaEswROgdIi_SnYEwc1t_lve/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=-GVqAyZ7a38", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.10", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=10", "k": "brain", "x": ""}, {"l": "Practice Library 1.B.1", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c01", "k": "brain", "x": ""}]}}, {"id": "L8", "n": 8, "ln": 2, "code": "1.B.2", "part": "1B", "partTitle": "Collecting Data", "title": "Random Sampling", "summary": "Simple, stratified, cluster and systematic random samples each select a sample by chance in a different way. You describe each method and tell bias from variation. The activity uses income data from your own city to ask what middle income means.", "standards": [{"code": "CED 1.11", "text": "Random sampling"}], "skills": ["Describe simple random, stratified, cluster and systematic samples.", "Carry out a random selection with a random number table or calculator."], "understandings": ["Random selection protects against bias because chance, not the researcher, decides who is chosen.", "Strata are chosen to be similar within, clusters to be mini-populations."], "misconceptions": ["Mixing up strata and clusters.", "Calling a volunteer or convenience sample random."], "processes": ["Label the population, assign numbers, generate random numbers, skip repeats, select."], "exam": ["A sampling description must be specific enough for someone else to repeat it."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L8", "files": {"F": [{"l": "1.B.2.APStats.Activity", "h": "https://drive.google.com/file/d/1HAleYfBMaJvUm6Ezo7kQAKOM5colAlNE/view", "k": "page", "x": ""}, {"l": "1.B.2.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1WgBf9eXCEi6LlAX334xQ2As6tSwlvr4j/view", "k": "page", "x": ""}, {"l": "1.B.2.APStats.PostActivityNotes", "h": "https://drive.google.com/file/d/1YuK4_Xx9II0cq25oFjfolYtEopF9w3vR/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=5dycK5ofBXM", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.11", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=11", "k": "brain", "x": ""}, {"l": "Practice Library 1.B.2", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c11", "k": "brain", "x": ""}]}}, {"id": "L9", "n": 9, "ln": 3, "code": "1.B.3", "part": "1B", "partTitle": "Collecting Data", "title": "Bias & Nonrandom Sampling", "summary": "A biased sample misleads however large it is. You identify undercoverage, nonresponse and voluntary response bias, plus response bias from question wording and self-reporting. The activity picks apart the statistics in college recruiting mailers and teaches you to ask what the sample was.", "standards": [{"code": "CED 1.12", "text": "Potential problems with sampling"}], "skills": ["Identify undercoverage, nonresponse, voluntary response and wording bias.", "Explain the direction a bias pushes the result."], "understandings": ["Bias is a flaw in the method, not a matter of sample size.", "A large biased sample is still biased."], "misconceptions": ["Saying the sample is too small when the problem is bias.", "Naming a bias type without the effect on the result."], "processes": ["Name the bias, tie it to the context, then say which way the estimate is pushed."], "exam": ["Name the bias and explain how it makes the result too high or too low."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L9", "files": {"F": [{"l": "1.B.3.APStats.Handout", "h": "https://drive.google.com/file/d/17gtZT8sfIRCPW-Y_tV-KvUcwMX-PFEc8/view", "k": "page", "x": ""}, {"l": "1.B.3.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/10RCiCgskPFQ5CVf1TYn2LqWFXMbrHo3-/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=EA6xYeSHupQ", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.12", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=12", "k": "brain", "x": ""}, {"l": "Practice Library 1.B.3", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c21", "k": "brain", "x": ""}]}}, {"id": "L10", "n": 10, "ln": 4, "code": "1.B.4", "part": "1B", "partTitle": "Collecting Data", "title": "Experimental Design", "summary": "A well-designed experiment controls extraneous variables with random assignment, a control group, replication, placebos and blinding. You describe the design and say what it allows you to conclude. The activity studies a Yale experiment that sent identical job applications under the names Jennifer and John.", "standards": [{"code": "CED 1.13", "text": "Experimental design (part A)"}], "skills": ["Identify explanatory and response variables, treatments, experimental units and confounding.", "Distinguish an experiment from an observational study."], "understandings": ["Random assignment, not random sampling, creates comparable groups.", "A control group gives a baseline for comparison."], "misconceptions": ["Treating random sampling and random assignment as the same thing.", "Ignoring confounding variables in an observational study."], "processes": ["List units, treatments and response, then say how treatments are assigned at random."], "exam": ["Say what is randomly assigned and why that rules out confounding."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L10", "files": {"F": [{"l": "1.B.4.APStats.Handout", "h": "https://drive.google.com/file/d/1dEG5btq4rApxC2Yk40iC1LBCi8ody7HC/view", "k": "page", "x": ""}, {"l": "1.B.4.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1aCVxTTr7jhVbRsSPXEsZbOy5WyGGcqLj/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=87T-AaEPjLQ", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.13", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=13", "k": "brain", "x": ""}, {"l": "Practice Library 1.B.4", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c31", "k": "brain", "x": ""}]}}, {"id": "L11", "n": 11, "ln": 5, "code": "1.B.5", "part": "1B", "partTitle": "Collecting Data", "title": "Grouping in Experiments", "summary": "Completely randomized, randomized block and matched pairs designs group experimental units in different ways to reduce variability. You choose a design and say why. The activity asks whether social media has hurt mental health, and shows how study design separates association from cause.", "standards": [{"code": "CED 1.13", "text": "Experimental design (parts B to D)"}], "skills": ["Design completely randomized and randomized block experiments.", "Use blinding, placebos and replication and explain what each does."], "understandings": ["Blocking removes variability from a known source and makes comparisons fairer.", "Replication reduces the role of chance in the results."], "misconceptions": ["Blocking by a variable that does not affect the response.", "Confusing blocks with treatments."], "processes": ["Group units into blocks, randomize within each block, apply treatments, compare responses."], "exam": ["Randomize within blocks and say why each design feature is there."], "qr": "https://broth11.github.io/ap-stats/unit-1.html#L11", "files": {"F": [{"l": "1.B.5.APStats.Handout", "h": "https://drive.google.com/file/d/17aNSTtww3Xg3paNxo6hHeQZDn38R_ZJe/view", "k": "page", "x": ""}, {"l": "1.B.5.APStats.MasteryChecks", "h": "https://drive.google.com/file/d/1X4Ts91tyrwZ6kVTbpUdW2whK1l3ut9PQ/view", "k": "page", "x": ""}], "V": [{"l": "STS lesson video (YouTube)", "h": "https://www.youtube.com/watch?v=J3MvI9hLEjU", "k": "video", "x": ""}], "K": [{"l": "Stats Hub 1.13", "h": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=13", "k": "brain", "x": ""}, {"l": "Practice Library 1.B.5", "h": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c41", "k": "brain", "x": ""}]}}]}</script>
+<script>var qrcode=function(){function i(t,r){function a(t,r){g=function(t){for(var r=new Array(t),e=0;e<t;e+=1){r[e]=new Array(t);for(var n=0;n<t;n+=1)r[e][n]=null}return r}(l=4*u+17),e(0,0),e(l-7,0),e(0,l-7),i(),o(),v(t,r),7<=u&&h(t),null==n&&(n=w(u,f,c)),d(n,r)}var u=t,f=y[r],g=null,l=0,n=null,c=[],s={},e=function(t,r){for(var e=-1;e<=7;e+=1)if(!(t+e<=-1||l<=t+e))for(var n=-1;n<=7;n+=1)r+n<=-1||l<=r+n||(g[t+e][r+n]=0<=e&&e<=6&&(0==n||6==n)||0<=n&&n<=6&&(0==e||6==e)||2<=e&&e<=4&&2<=n&&n<=4)},o=function(){for(var t=8;t<l-8;t+=1)null==g[t][6]&&(g[t][6]=t%2==0);for(var r=8;r<l-8;r+=1)null==g[6][r]&&(g[6][r]=r%2==0)},i=function(){for(var t=B.getPatternPosition(u),r=0;r<t.length;r+=1)for(var e=0;e<t.length;e+=1){var n=t[r],o=t[e];if(null==g[n][o])for(var i=-2;i<=2;i+=1)for(var a=-2;a<=2;a+=1)g[n+i][o+a]=-2==i||2==i||-2==a||2==a||0==i&&0==a}},h=function(t){for(var r=B.getBCHTypeNumber(u),e=0;e<18;e+=1){var n=!t&&1==(r>>e&1);g[Math.floor(e/3)][e%3+l-8-3]=n}for(e=0;e<18;e+=1){n=!t&&1==(r>>e&1);g[e%3+l-8-3][Math.floor(e/3)]=n}},v=function(t,r){for(var e=f<<3|r,n=B.getBCHTypeInfo(e),o=0;o<15;o+=1){var i=!t&&1==(n>>o&1);o<6?g[o][8]=i:o<8?g[o+1][8]=i:g[l-15+o][8]=i}for(o=0;o<15;o+=1){i=!t&&1==(n>>o&1);o<8?g[8][l-o-1]=i:o<9?g[8][15-o-1+1]=i:g[8][15-o-1]=i}g[l-8][8]=!t},d=function(t,r){for(var e=-1,n=l-1,o=7,i=0,a=B.getMaskFunction(r),u=l-1;0<u;u-=2)for(6==u&&(u-=1);;){for(var f=0;f<2;f+=1)if(null==g[n][u-f]){var c=!1;i<t.length&&(c=1==(t[i]>>>o&1)),a(n,u-f)&&(c=!c),g[n][u-f]=c,-1==(o-=1)&&(i+=1,o=7)}if((n+=e)<0||l<=n){n-=e,e=-e;break}}},w=function(t,r,e){for(var n=b.getRSBlocks(t,r),o=M(),i=0;i<e.length;i+=1){var a=e[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var u=0;for(i=0;i<n.length;i+=1)u+=n[i].dataCount;if(o.getLengthInBits()>8*u)throw"code length overflow. ("+o.getLengthInBits()+">"+8*u+")";for(o.getLengthInBits()+4<=8*u&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=8*u||(o.put(236,8),o.getLengthInBits()>=8*u));)o.put(17,8);return function(t,r){for(var e=0,n=0,o=0,i=new Array(r.length),a=new Array(r.length),u=0;u<r.length;u+=1){var f=r[u].dataCount,c=r[u].totalCount-f;n=Math.max(n,f),o=Math.max(o,c),i[u]=new Array(f);for(var g=0;g<i[u].length;g+=1)i[u][g]=255&t.getBuffer()[g+e];e+=f;var l=B.getErrorCorrectPolynomial(c),h=C(i[u],l.getLength()-1).mod(l);a[u]=new Array(l.getLength()-1);for(g=0;g<a[u].length;g+=1){var s=g+h.getLength()-a[u].length;a[u][g]=0<=s?h.getAt(s):0}}var v=0;for(g=0;g<r.length;g+=1)v+=r[g].totalCount;var d=new Array(v),w=0;for(g=0;g<n;g+=1)for(u=0;u<r.length;u+=1)g<i[u].length&&(d[w]=i[u][g],w+=1);for(g=0;g<o;g+=1)for(u=0;u<r.length;u+=1)g<a[u].length&&(d[w]=a[u][g],w+=1);return d}(o,n)};s.addData=function(t,r){var e=null;switch(r=r||"Byte"){case"Numeric":e=x(t);break;case"Alphanumeric":e=m(t);break;case"Byte":e=L(t);break;case"Kanji":e=D(t);break;default:throw"mode:"+r}c.push(e),n=null},s.isDark=function(t,r){if(t<0||l<=t||r<0||l<=r)throw t+","+r;return g[t][r]},s.getModuleCount=function(){return l},s.make=function(){if(u<1){for(var t=1;t<40;t++){for(var r=b.getRSBlocks(t,f),e=M(),n=0;n<c.length;n++){var o=c[n];e.put(o.getMode(),4),e.put(o.getLength(),B.getLengthInBits(o.getMode(),t)),o.write(e)}var i=0;for(n=0;n<r.length;n++)i+=r[n].dataCount;if(e.getLengthInBits()<=8*i)break}u=t}a(!1,function(){for(var t=0,r=0,e=0;e<8;e+=1){a(!0,e);var n=B.getLostPoint(s);(0==e||n<t)&&(t=n,r=e)}return r}())},s.createTableTag=function(t,r){t=t||2;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+(r=void 0===r?4*t:r)+"px;",e+='">',e+="<tbody>";for(var n=0;n<s.getModuleCount();n+=1){e+="<tr>";for(var o=0;o<s.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+t+"px;",e+=" height: "+t+"px;",e+=" background-color: ",e+=s.isDark(n,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>"},s.createSvgTag=function(t,r,e,n){var o={};"object"==typeof t&&(t=(o=t).cellSize,r=o.margin,e=o.alt,n=o.title),t=t||2,r=void 0===r?4*t:r,(e="string"==typeof e?{text:e}:e||{}).text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,(n="string"==typeof n?{text:n}:n||{}).text=n.text||null,n.id=n.text?n.id||"qrcode-title":null;var i,a,u,f,c=s.getModuleCount()*t+2*r,g="";for(f="l"+t+",0 0,"+t+" -"+t+",0 0,-"+t+"z ",g+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',g+=o.scalable?"":' width="'+c+'px" height="'+c+'px"',g+=' viewBox="0 0 '+c+" "+c+'" ',g+=' preserveAspectRatio="xMinYMin meet"',g+=n.text||e.text?' role="img" aria-labelledby="'+p([n.id,e.id].join(" ").trim())+'"':"",g+=">",g+=n.text?'<title id="'+p(n.id)+'">'+p(n.text)+"</title>":"",g+=e.text?'<description id="'+p(e.id)+'">'+p(e.text)+"</description>":"",g+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',g+='<path d="',a=0;a<s.getModuleCount();a+=1)for(u=a*t+r,i=0;i<s.getModuleCount();i+=1)s.isDark(a,i)&&(g+="M"+(i*t+r)+","+u+f);return g+='" stroke="transparent" fill="black"/>',g+="</svg>"},s.createDataURL=function(o,t){o=o||2,t=void 0===t?4*o:t;var r=s.getModuleCount()*o+2*t,i=t,a=r-t;return I(r,r,function(t,r){if(i<=t&&t<a&&i<=r&&r<a){var e=Math.floor((t-i)/o),n=Math.floor((r-i)/o);return s.isDark(n,e)?0:1}return 1})},s.createImgTag=function(t,r,e){t=t||2,r=void 0===r?4*t:r;var n=s.getModuleCount()*t+2*r,o="";return o+="<img",o+=' src="',o+=s.createDataURL(t,r),o+='"',o+=' width="',o+=n,o+='"',o+=' height="',o+=n,o+='"',e&&(o+=' alt="',o+=p(e),o+='"'),o+="/>"};var p=function(t){for(var r="",e=0;e<t.length;e+=1){var n=t.charAt(e);switch(n){case"<":r+="&lt;";break;case">":r+="&gt;";break;case"&":r+="&amp;";break;case'"':r+="&quot;";break;default:r+=n}}return r};return s.createASCII=function(t,r){if((t=t||1)<2)return function(t){t=void 0===t?2:t;var r,e,n,o,i,a=1*s.getModuleCount()+2*t,u=t,f=a-t,c={"██":"█","█ ":"▀"," █":"▄","  ":" "},g={"██":"▀","█ ":"▀"," █":" ","  ":" "},l="";for(r=0;r<a;r+=2){for(n=Math.floor((r-u)/1),o=Math.floor((r+1-u)/1),e=0;e<a;e+=1)i="█",u<=e&&e<f&&u<=r&&r<f&&s.isDark(n,Math.floor((e-u)/1))&&(i=" "),u<=e&&e<f&&u<=r+1&&r+1<f&&s.isDark(o,Math.floor((e-u)/1))?i+=" ":i+="█",l+=t<1&&f<=r+1?g[i]:c[i];l+="\n"}return a%2&&0<t?l.substring(0,l.length-a-1)+Array(1+a).join("▀"):l.substring(0,l.length-1)}(r);t-=1,r=void 0===r?2*t:r;var e,n,o,i,a=s.getModuleCount()*t+2*r,u=r,f=a-r,c=Array(t+1).join("██"),g=Array(t+1).join("  "),l="",h="";for(e=0;e<a;e+=1){for(o=Math.floor((e-u)/t),h="",n=0;n<a;n+=1)i=1,u<=n&&n<f&&u<=e&&e<f&&s.isDark(o,Math.floor((n-u)/t))&&(i=0),h+=i?c:g;for(o=0;o<t;o+=1)l+=h+"\n"}return l.substring(0,l.length-1)},s.renderTo2dContext=function(t,r){r=r||2;for(var e=s.getModuleCount(),n=0;n<e;n++)for(var o=0;o<e;o++)t.fillStyle=s.isDark(n,o)?"black":"white",t.fillRect(n*r,o*r,r,r)},s}i.stringToBytes=(i.stringToBytesFuncs={default:function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);r.push(255&n)}return r}}).default,i.createStringToBytes=function(u,f){var i=function(){function t(){var t=r.read();if(-1==t)throw"eof";return t}for(var r=S(u),e=0,n={};;){var o=r.read();if(-1==o)break;var i=t(),a=t()<<8|t();n[String.fromCharCode(o<<8|i)]=a,e+=1}if(e!=f)throw e+" != "+f;return n}(),a="?".charCodeAt(0);return function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);if(n<128)r.push(n);else{var o=i[t.charAt(e)];"number"==typeof o?(255&o)==o?r.push(o):(r.push(o>>>8),r.push(255&o)):r.push(a)}}return r}};var r,t,a=1,u=2,o=4,f=8,y={L:1,M:0,Q:3,H:2},e=0,n=1,c=2,g=3,l=4,h=5,s=6,v=7,B=(r=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],(t={}).getBCHTypeInfo=function(t){for(var r=t<<10;0<=d(r)-d(1335);)r^=1335<<d(r)-d(1335);return 21522^(t<<10|r)},t.getBCHTypeNumber=function(t){for(var r=t<<12;0<=d(r)-d(7973);)r^=7973<<d(r)-d(7973);return t<<12|r},t.getPatternPosition=function(t){return r[t-1]},t.getMaskFunction=function(t){switch(t){case e:return function(t,r){return(t+r)%2==0};case n:return function(t,r){return t%2==0};case c:return function(t,r){return r%3==0};case g:return function(t,r){return(t+r)%3==0};case l:return function(t,r){return(Math.floor(t/2)+Math.floor(r/3))%2==0};case h:return function(t,r){return t*r%2+t*r%3==0};case s:return function(t,r){return(t*r%2+t*r%3)%2==0};case v:return function(t,r){return(t*r%3+(t+r)%2)%2==0};default:throw"bad maskPattern:"+t}},t.getErrorCorrectPolynomial=function(t){for(var r=C([1],0),e=0;e<t;e+=1)r=r.multiply(C([1,w.gexp(e)],0));return r},t.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case a:return 10;case u:return 9;case o:case f:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case a:return 12;case u:return 11;case o:return 16;case f:return 10;default:throw"mode:"+t}else{if(!(r<41))throw"type:"+r;switch(t){case a:return 14;case u:return 13;case o:return 16;case f:return 12;default:throw"mode:"+t}}},t.getLostPoint=function(t){for(var r=t.getModuleCount(),e=0,n=0;n<r;n+=1)for(var o=0;o<r;o+=1){for(var i=0,a=t.isDark(n,o),u=-1;u<=1;u+=1)if(!(n+u<0||r<=n+u))for(var f=-1;f<=1;f+=1)o+f<0||r<=o+f||0==u&&0==f||a==t.isDark(n+u,o+f)&&(i+=1);5<i&&(e+=3+i-5)}for(n=0;n<r-1;n+=1)for(o=0;o<r-1;o+=1){var c=0;t.isDark(n,o)&&(c+=1),t.isDark(n+1,o)&&(c+=1),t.isDark(n,o+1)&&(c+=1),t.isDark(n+1,o+1)&&(c+=1),0!=c&&4!=c||(e+=3)}for(n=0;n<r;n+=1)for(o=0;o<r-6;o+=1)t.isDark(n,o)&&!t.isDark(n,o+1)&&t.isDark(n,o+2)&&t.isDark(n,o+3)&&t.isDark(n,o+4)&&!t.isDark(n,o+5)&&t.isDark(n,o+6)&&(e+=40);for(o=0;o<r;o+=1)for(n=0;n<r-6;n+=1)t.isDark(n,o)&&!t.isDark(n+1,o)&&t.isDark(n+2,o)&&t.isDark(n+3,o)&&t.isDark(n+4,o)&&!t.isDark(n+5,o)&&t.isDark(n+6,o)&&(e+=40);var g=0;for(o=0;o<r;o+=1)for(n=0;n<r;n+=1)t.isDark(n,o)&&(g+=1);return e+=Math.abs(100*g/r/r-50)/5*10},t);function d(t){for(var r=0;0!=t;)r+=1,t>>>=1;return r}var w=function(){for(var r=new Array(256),e=new Array(256),t=0;t<8;t+=1)r[t]=1<<t;for(t=8;t<256;t+=1)r[t]=r[t-4]^r[t-5]^r[t-6]^r[t-8];for(t=0;t<255;t+=1)e[r[t]]=t;var n={glog:function(t){if(t<1)throw"glog("+t+")";return e[t]},gexp:function(t){for(;t<0;)t+=255;for(;256<=t;)t-=255;return r[t]}};return n}();function C(n,o){if(void 0===n.length)throw n.length+"/"+o;var r=function(){for(var t=0;t<n.length&&0==n[t];)t+=1;for(var r=new Array(n.length-t+o),e=0;e<n.length-t;e+=1)r[e]=n[e+t];return r}(),i={getAt:function(t){return r[t]},getLength:function(){return r.length},multiply:function(t){for(var r=new Array(i.getLength()+t.getLength()-1),e=0;e<i.getLength();e+=1)for(var n=0;n<t.getLength();n+=1)r[e+n]^=w.gexp(w.glog(i.getAt(e))+w.glog(t.getAt(n)));return C(r,0)},mod:function(t){if(i.getLength()-t.getLength()<0)return i;for(var r=w.glog(i.getAt(0))-w.glog(t.getAt(0)),e=new Array(i.getLength()),n=0;n<i.getLength();n+=1)e[n]=i.getAt(n);for(n=0;n<t.getLength();n+=1)e[n]^=w.gexp(w.glog(t.getAt(n))+r);return C(e,0).mod(t)}};return i}function p(){var e=[],o={writeByte:function(t){e.push(255&t)},writeShort:function(t){o.writeByte(t),o.writeByte(t>>>8)},writeBytes:function(t,r,e){r=r||0,e=e||t.length;for(var n=0;n<e;n+=1)o.writeByte(t[n+r])},writeString:function(t){for(var r=0;r<t.length;r+=1)o.writeByte(t.charCodeAt(r))},toByteArray:function(){return e},toString:function(){var t="";t+="[";for(var r=0;r<e.length;r+=1)0<r&&(t+=","),t+=e[r];return t+="]"}};return o}var k,A,b=(k=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],(A={}).getRSBlocks=function(t,r){var e=function(t,r){switch(r){case y.L:return k[4*(t-1)+0];case y.M:return k[4*(t-1)+1];case y.Q:return k[4*(t-1)+2];case y.H:return k[4*(t-1)+3];default:return}}(t,r);if(void 0===e)throw"bad rs block @ typeNumber:"+t+"/errorCorrectionLevel:"+r;for(var n,o,i=e.length/3,a=[],u=0;u<i;u+=1)for(var f=e[3*u+0],c=e[3*u+1],g=e[3*u+2],l=0;l<f;l+=1)a.push((n=g,o=void 0,(o={}).totalCount=c,o.dataCount=n,o));return a},A),M=function(){var e=[],n=0,o={getBuffer:function(){return e},getAt:function(t){var r=Math.floor(t/8);return 1==(e[r]>>>7-t%8&1)},put:function(t,r){for(var e=0;e<r;e+=1)o.putBit(1==(t>>>r-e-1&1))},getLengthInBits:function(){return n},putBit:function(t){var r=Math.floor(n/8);e.length<=r&&e.push(0),t&&(e[r]|=128>>>n%8),n+=1}};return o},x=function(t){var r=a,n=t,e={getMode:function(){return r},getLength:function(t){return n.length},write:function(t){for(var r=n,e=0;e+2<r.length;)t.put(o(r.substring(e,e+3)),10),e+=3;e<r.length&&(r.length-e==1?t.put(o(r.substring(e,e+1)),4):r.length-e==2&&t.put(o(r.substring(e,e+2)),7))}},o=function(t){for(var r=0,e=0;e<t.length;e+=1)r=10*r+i(t.charAt(e));return r},i=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);throw"illegal char :"+t};return e},m=function(t){var r=u,n=t,e={getMode:function(){return r},getLength:function(t){return n.length},write:function(t){for(var r=n,e=0;e+1<r.length;)t.put(45*o(r.charAt(e))+o(r.charAt(e+1)),11),e+=2;e<r.length&&t.put(o(r.charAt(e)),6)}},o=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);if("A"<=t&&t<="Z")return t.charCodeAt(0)-"A".charCodeAt(0)+10;switch(t){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+t}};return e},L=function(t){var r=o,e=i.stringToBytes(t),n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=0;r<e.length;r+=1)t.put(e[r],8)}};return n},D=function(t){var r=f,e=i.stringToBytesFuncs.SJIS;if(!e)throw"sjis not supported.";!function(){var t=e("友");if(2!=t.length||38726!=(t[0]<<8|t[1]))throw"sjis not supported."}();var o=e(t),n={getMode:function(){return r},getLength:function(t){return~~(o.length/2)},write:function(t){for(var r=o,e=0;e+1<r.length;){var n=(255&r[e])<<8|255&r[e+1];if(33088<=n&&n<=40956)n-=33088;else{if(!(57408<=n&&n<=60351))throw"illegal char at "+(e+1)+"/"+n;n-=49472}n=192*(n>>>8&255)+(255&n),t.put(n,13),e+=2}if(e<r.length)throw"illegal char at "+(e+1)}};return n},S=function(t){var e=t,n=0,o=0,i=0,r={read:function(){for(;i<8;){if(n>=e.length){if(0==i)return-1;throw"unexpected end of file./"+i}var t=e.charAt(n);if(n+=1,"="==t)return i=0,-1;t.match(/^\s$/)||(o=o<<6|a(t.charCodeAt(0)),i+=6)}var r=o>>>i-8&255;return i-=8,r}},a=function(t){if(65<=t&&t<=90)return t-65;if(97<=t&&t<=122)return t-97+26;if(48<=t&&t<=57)return t-48+52;if(43==t)return 62;if(47==t)return 63;throw"c:"+t};return r},I=function(t,r,e){for(var n=function(t,r){var n=t,o=r,l=new Array(t*r),e={setPixel:function(t,r,e){l[r*n+t]=e},write:function(t){t.writeString("GIF87a"),t.writeShort(n),t.writeShort(o),t.writeByte(128),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(255),t.writeByte(255),t.writeByte(255),t.writeString(","),t.writeShort(0),t.writeShort(0),t.writeShort(n),t.writeShort(o),t.writeByte(0);var r=i(2);t.writeByte(2);for(var e=0;255<r.length-e;)t.writeByte(255),t.writeBytes(r,e,255),e+=255;t.writeByte(r.length-e),t.writeBytes(r,e,r.length-e),t.writeByte(0),t.writeString(";")}},i=function(t){for(var r=1<<t,e=1+(1<<t),n=t+1,o=h(),i=0;i<r;i+=1)o.add(String.fromCharCode(i));o.add(String.fromCharCode(r)),o.add(String.fromCharCode(e));var a=p(),u=function(t){var e=t,n=0,o=0,r={write:function(t,r){if(t>>>r!=0)throw"length over";for(;8<=n+r;)e.writeByte(255&(t<<n|o)),r-=8-n,t>>>=8-n,n=o=0;o|=t<<n,n+=r},flush:function(){0<n&&e.writeByte(o)}};return r}(a);u.write(r,n);var f=0,c=String.fromCharCode(l[f]);for(f+=1;f<l.length;){var g=String.fromCharCode(l[f]);f+=1,o.contains(c+g)?c+=g:(u.write(o.indexOf(c),n),o.size()<4095&&(o.size()==1<<n&&(n+=1),o.add(c+g)),c=g)}return u.write(o.indexOf(c),n),u.write(e,n),u.flush(),a.toByteArray()},h=function(){var r={},e=0,n={add:function(t){if(n.contains(t))throw"dup key:"+t;r[t]=e,e+=1},size:function(){return e},indexOf:function(t){return r[t]},contains:function(t){return void 0!==r[t]}};return n};return e}(t,r),o=0;o<r;o+=1)for(var i=0;i<t;i+=1)n.setPixel(i,o,e(i,o));var a=p();n.write(a);for(var u=function(){function e(t){a+=String.fromCharCode(r(63&t))}var n=0,o=0,i=0,a="",t={},r=function(t){if(t<0);else{if(t<26)return 65+t;if(t<52)return t-26+97;if(t<62)return t-52+48;if(62==t)return 43;if(63==t)return 47}throw"n:"+t};return t.writeByte=function(t){for(n=n<<8|255&t,o+=8,i+=1;6<=o;)e(n>>>o-6),o-=6},t.flush=function(){if(0<o&&(e(n<<6-o),o=n=0),i%3!=0)for(var t=3-i%3,r=0;r<t;r+=1)a+="="},t.toString=function(){return a},t}(),f=a.toByteArray(),c=0;c<f.length;c+=1)u.writeByte(f[c]);return u.flush(),"data:image/gif;base64,"+u};return i}();qrcode.stringToBytesFuncs["UTF-8"]=function(t){return function(t){for(var r=[],e=0;e<t.length;e++){var n=t.charCodeAt(e);n<128?r.push(n):n<2048?r.push(192|n>>6,128|63&n):n<55296||57344<=n?r.push(224|n>>12,128|n>>6&63,128|63&n):(e++,n=65536+((1023&n)<<10|1023&t.charCodeAt(e)),r.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|63&n))}return r}(t)},function(t){"function"==typeof define&&define.amd?define([],t):"object"==typeof exports&&(module.exports=t())}(function(){return qrcode});</script>
+<script>
+(function(){
+'use strict';
+var D=JSON.parse(document.getElementById('data').textContent), app=document.getElementById('app'), L=D.lessons, P=D.parts;
+var ICON={"page": "<path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\" /><path d=\"M14 2v4a2 2 0 0 0 2 2h4\" /><path d=\"M10 9H8\" /><path d=\"M16 13H8\" /><path d=\"M16 17H8\" />", "link": "<path d=\"M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71\" /><path d=\"M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71\" />", "video": "<path d=\"M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17\" /><path d=\"m10 15 5-3-5-3z\" />", "brain": "<path d=\"M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z\" /><path d=\"M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z\" /><path d=\"M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4\" /><path d=\"M17.599 6.5a3 3 0 0 0 .399-1.375\" /><path d=\"M6.003 5.125A3 3 0 0 0 6.401 6.5\" /><path d=\"M3.477 10.896a4 4 0 0 1 .585-.396\" /><path d=\"M19.938 10.5a4 4 0 0 1 .585.396\" /><path d=\"M6 18a4 4 0 0 1-1.967-.516\" /><path d=\"M19.967 17.484A4 4 0 0 1 18 18\" />"};
+var TABS=[['overview','Overview'],['skills','Skills'],['standards','CED'],['files','Files'],['understandings','Key ideas'],['misconceptions','Watch out'],['processes','How to'],['exam','Exam tips']];
+var NAME={skills:'Skills',standards:'CED topics',understandings:'Key ideas',misconceptions:'Watch out for',processes:'How to do it',exam:'Exam tips',files:'Files'};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function fmt(s){return esc(s).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>');}
+function icon(k){return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICON[k]+'</svg>';}
+function byId(id){for(var i=0;i<L.length;i++)if(L[i].id===id)return L[i];return null;}
+function pad(n){return (n<10?'0':'')+n;}
+function chips(l){return l.standards.map(function(s){return '<span class="chip">'+esc(s.code.replace('CED ',''))+'</span>';}).join('');}
+function list(a){return a&&a.length?'<ul>'+a.map(function(x){return '<li>'+fmt(x)+'</li>';}).join('')+'</ul>':'<p class="none">Nothing here yet</p>';}
+function std(l){return l.standards.length?'<dl class="stds">'+l.standards.map(function(s){return '<dt>'+esc(s.code.replace('CED ',''))+'</dt><dd>'+fmt(s.text)+'</dd>';}).join('')+'</dl>':'<p class="none">Nothing here yet</p>';}
+function btns(items){return items.map(function(f){return '<a class="fbtn" href="'+esc(f.h)+'" target="_blank" rel="noopener noreferrer" title="'+esc(f.l)+'">'+icon(f.k)+'<span>'+esc(f.l)+(f.x?' <em>'+esc(f.x)+'</em>':'')+'</span></a>';}).join('');}
+function col(t,items){return '<div class="col"><h3>'+t+'</h3>'+(items.length?'<div class="fbtns">'+btns(items)+'</div>':'<p class="none">None</p>')+'</div>';}
+function cols(l){return '<div class="cols">'+col('Files',l.files.F)+col('Videos',l.files.V)+col('Links',l.files.K)+'</div>';}
+function lessonUrl(id){var l=byId(id);return l&&l.qr?l.qr:location.href.split('#')[0]+'#'+id;}
+function qrSvg(url){var q=qrcode(0,'M');q.addData(url);q.make();var n=q.getModuleCount(),d='',r,c;for(r=0;r<n;r++)for(c=0;c<n;c++)if(q.isDark(r,c))d+='M'+(c+4)+' '+(r+4)+'h1v1h-1z';return '<svg viewBox="0 0 '+(n+8)+' '+(n+8)+'" shape-rendering="crispEdges" aria-hidden="true"><rect width="100%" height="100%" fill="#fff"/><path d="'+d+'" fill="#0b0b0b"/></svg>';}
+function qrBtn(l){return '<button type="button" class="qr" data-qr="'+l.id+'" title="Show QR code for lesson '+esc(l.code)+'" aria-label="Show QR code for lesson '+esc(l.code)+'">'+qrSvg(lessonUrl(l.id))+'</button>';}
+function qrClose(){var m=document.getElementById('qrm');if(m)m.remove();}
+function qrOpen(id){var l=byId(id);if(!l)return;qrClose();var u=lessonUrl(id),m=document.createElement('div');m.id='qrm';m.className='qrm';m.setAttribute('role','dialog');m.setAttribute('aria-modal','true');m.setAttribute('aria-label','QR code for lesson '+l.code);m.innerHTML='<div class="qrm-card"><div class="qrm-big">'+qrSvg(u)+'</div><div class="qrm-cap"><span class="code-tag">Lesson '+esc(l.code)+'</span><b>'+esc(l.title)+'</b><span class="qrm-url">'+esc(u)+'</span></div></div>';document.body.appendChild(m);}
+function numCell(l){return '<span class="num">'+pad(l.ln)+'</span>';}
+function titleBlock(l){return '<div class="ttl"><span class="code-tag">Lesson '+esc(l.code)+'</span><h2>'+fmt(l.title)+'</h2></div>';}
+
+var state={lens:'overview',lesson:null,section:null};
+function read(){
+  var h=decodeURIComponent(location.hash.slice(1)),p=h.split('/'),n={lens:state.lens,lesson:null,section:null};
+  if(byId(p[0])){n.lesson=p[0];n.section=p[1]||null;}
+  else n.lens=TABS.some(function(t){return t[0]===h;})?h:'overview';
+  return n;
+}
+function lensBar(){return '<nav class="lens" aria-label="Category">'+TABS.map(function(t){return '<button type="button" class="tab'+(state.lens===t[0]?' on':'')+'" data-go="#'+(t[0]==='overview'?'':t[0])+'">'+t[1]+'</button>';}).join('')+'</nav>';}
+function hero(){return '<header class="hero"><span class="sticker">'+L.length+' lessons</span><div class="eyebrow">Unit '+D.unit+'</div><h1>'+esc(D.title)+'</h1><p>'+fmt(D.overview)+'</p></header>';}
+function jump(){return P.length>1?'<nav class="jump" aria-label="Parts">'+P.map(function(p){return '<button type="button" data-jump="p'+p.code+'">'+p.code+'</button>';}).join('')+'</nav>':'';}
+function partHead(p,n){return '<div class="part" id="p'+p.code+'"><div class="code">'+p.code+'</div><div class="pt"><b>'+esc(p.title)+'</b><span>'+n+' lesson'+(n!==1?'s':'')+'</span></div></div>';}
+
+function overviewCard(l){
+  return '<article class="card" data-id="'+l.id+'">'+qrBtn(l)+'<div class="card-top" role="link" tabindex="0" data-go="#'+l.id+'">'+numCell(l)+titleBlock(l)+'</div>'+
+   '<div class="chips"><span class="lab">CED</span>'+chips(l)+'</div>'+
+   '<div class="card-body"><div class="blk" role="link" tabindex="0" data-go="#'+l.id+'/skills"><h3>Skills</h3>'+list(l.skills.slice(0,3))+(l.skills.length>3?'<p class="more">+'+(l.skills.length-3)+' more</p>':'')+'</div>'+
+   '<div class="blk" role="link" tabindex="0" data-go="#'+l.id+'"><h3>Summary</h3><p>'+fmt(l.summary)+'</p></div></div>'+
+   '<div class="cut"></div>'+cols(l)+'</article>';
+}
+function lensRow(l,k){
+  var body=k==='files'?cols(l):k==='standards'?std(l):list(l[k]);
+  return '<article class="card lrow" data-id="'+l.id+'">'+qrBtn(l)+'<div class="lr-head" role="link" tabindex="0" data-go="#'+l.id+'/'+k+'">'+numCell(l)+titleBlock(l)+'</div><div class="lr-body">'+body+'</div></article>';
+}
+function board(){
+  var out='';
+  P.forEach(function(p){
+    var ls=L.filter(function(l){return l.part===p.code;});
+    out+='<section>'+partHead(p,ls.length)+ls.map(function(l){return state.lens==='overview'?overviewCard(l):lensRow(l,state.lens);}).join('')+'</section>';
+  });
+  return out;
+}
+function sec(key,inner){return '<section class="sec'+(state.section===key?' focus':'')+'" id="s-'+key+'"><h3>'+NAME[key]+'</h3>'+inner+'</section>';}
+function sheet(){
+  var l=byId(state.lesson); if(!l)return '';
+  var i=L.indexOf(l),pv=L[i-1],nx=L[i+1];
+  return '<div class="sheet" tabindex="-1" role="dialog" aria-modal="true" aria-label="Lesson '+esc(l.code)+'"><div class="wrap">'+
+   '<div class="sheet-bar"><button type="button" class="back" data-go="#'+(state.lens==='overview'?'':state.lens)+'">&larr; Unit '+D.unit+' '+esc(D.title)+'</button><span class="pager">'+
+   (pv?'<button type="button" data-go="#'+pv.id+'" title="'+esc(pv.title)+'">&lsaquo; '+esc(pv.code)+'</button>':'<span class="off">&lsaquo;</span>')+
+   (nx?'<button type="button" data-go="#'+nx.id+'" title="'+esc(nx.title)+'">'+esc(nx.code)+' &rsaquo;</button>':'<span class="off">&rsaquo;</span>')+'</span></div>'+
+   '<header class="s-head">'+numCell(l)+'<div><span class="code-tag">Lesson '+esc(l.code)+' · '+esc(l.partTitle)+'</span><h2>'+fmt(l.title)+'</h2></div></header>'+
+   '<div class="s-grid"><div class="s-main">'+
+   '<section class="sec"><h3>Summary</h3><p>'+fmt(l.summary)+'</p></section>'+
+   '<div class="quad">'+sec('understandings',list(l.understandings))+sec('misconceptions',list(l.misconceptions))+sec('processes',list(l.processes))+sec('exam',list(l.exam))+'</div>'+
+   sec('skills',list(l.skills))+'</div>'+
+   '<aside class="s-side">'+sec('standards',std(l))+'</aside></div>'+
+   '<section class="sec'+(state.section==='files'?' focus':'')+'" id="s-files">'+cols(l)+'</section>'+
+   '</div></div>';
+}
+function draw(){
+  var open=!!state.lesson;
+  app.innerHTML=hero()+lensBar()+(state.lens==='overview'?jump():'')+board()+'<p class="foot">Click a lesson for its full page. Esc returns.</p>'+sheet();
+  document.body.classList.toggle('locked',open);
+  var sh=app.querySelector('.sheet'); if(sh){sh.focus({preventScroll:true});var f=sh.querySelector('.focus');if(f)f.scrollIntoView({block:'center'});else sh.scrollTop=0;}
+}
+function route(){
+  var n=read(),same=n.lens===state.lens&&n.lesson===state.lesson&&n.section===state.section;
+  var y=window.scrollY; state=n; if(!same){draw(); if(!n.lesson)window.scrollTo(0,y);}
+}
+window.addEventListener('hashchange',route);
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape'&&document.getElementById('qrm')){qrClose();return;}
+  if(e.key==='Escape'&&state.lesson){location.hash=state.lens==='overview'?'':state.lens;return;}
+  if(state.lesson&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){var i=L.indexOf(byId(state.lesson))+(e.key==='ArrowRight'?1:-1);if(L[i])location.hash=L[i].id;}
+});
+document.addEventListener('click',function(e){var q=e.target.closest('[data-qr]');if(q){qrOpen(q.getAttribute('data-qr'));return;}if(document.getElementById('qrm')){if(!e.target.closest('.qrm-card'))qrClose();return;}var o=e.target.closest('[data-open]');if(o){window.open(o.getAttribute('data-open'),'_blank','noopener');return;}var g=e.target.closest('[data-go]');if(g){location.hash=g.getAttribute('data-go');return;}var hr=e.target.closest('[data-href]');if(hr){location.href=hr.getAttribute('data-href');return;}});
+document.addEventListener('keydown',function(e){if((e.key==='Enter'||e.key===' ')&&e.target.matches&&e.target.matches('[role=link][data-go]')){e.preventDefault();location.hash=e.target.getAttribute('data-go');}});
+app.addEventListener('click',function(e){var a=e.target.closest('[data-jump]');if(a){e.preventDefault();var t=document.getElementById(a.getAttribute('data-jump'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});}});
+state=read(); draw();
+})();
+</script><!-- unit-data:start -->
+<script id="unit-data" type="application/json">
+{
+ "version": 1,
+ "audience": "student",
+ "unit": {
+  "id": "Unit 1",
+  "number": "1",
+  "title": "Exploring One-Variable Data and Collecting Data",
+  "course": "AP Stats - Files for Students (Lessons & Worksheets)",
+  "overview": "Describes the distribution of one categorical or quantitative variable, compares distributions, then moves to how data are collected: sampling methods and their problems, and experimental design."
+ },
+ "rootPrefix": "",
+ "updated": "2026-11-19T14:13:55",
+ "categories": [
+  "understandings",
+  "misconceptions",
+  "processes",
+  "exam"
+ ],
+ "lessons": [
+  {
+   "id": "L1",
+   "n": 1,
+   "title": "Populations, Samples, & Data",
+   "topic": "Populations, Samples, & Data.",
+   "standards": [
+    {
+     "code": "CED 1.1",
+     "text": "Introducing statistics: what can we learn from data"
+    },
+    {
+     "code": "CED 1.2",
+     "text": "Variables"
+    }
+   ],
+   "skills": [
+    "Write an investigative question and identify the population and sample.",
+    "Classify variables as categorical or quantitative, and identify individuals."
+   ],
+   "explainer": {
+    "understandings": [
+     "Statistics answers a question about a population using data from individuals.",
+     "The type of variable decides which summaries and graphs are allowed."
+    ],
+    "misconceptions": [
+     "Numbers used as labels (zip codes, jersey numbers) are categorical, not quantitative.",
+     "Confusing the individuals with the variables recorded on them."
+    ],
+    "processes": [
+     "State the question, identify individuals, then name each variable and its type."
+    ],
+    "exam": [
+     "Name the variable in context and say categorical or quantitative; a bare type earns nothing."
+    ]
+   },
+   "summary": "Statistics is about reasoning with evidence, not just computing means and medians. You separate populations from samples, classify variables, and tell parameters from statistics. The activity starts with a World War II puzzle that has a surprising answer, then asks whether the data colleges use in recruiting emails can mislead.",
+   "resources": [
+    {
+     "label": "1.A.1.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1sdZFolhblKZcKaP_Fco-E2Tt07CYPDOH/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.1.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1-8CXJsZI5VFU7voE04P1DLFl-CGWKXc5/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1KDTLCOkWkLLnd3ADoVpvFmVWui36vlq_",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=4-7iHgDKamQ"
+    },
+    {
+     "label": "Stats Hub 1.1",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=1"
+    },
+    {
+     "label": "Stats Hub 1.2",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=2"
+    },
+    {
+     "label": "Practice Library 1.A.1",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a01"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L2",
+   "n": 2,
+   "title": "Describing a Categorical Variable",
+   "topic": "Describing a Categorical Variable.",
+   "standards": [
+    {
+     "code": "CED 1.3",
+     "text": "Tabular representation and summary statistics for one categorical variable"
+    },
+    {
+     "code": "CED 1.4",
+     "text": "Graphical representations for one categorical variable"
+    }
+   ],
+   "skills": [
+    "Build frequency and relative frequency tables.",
+    "Draw and read bar charts and compare categories with relative frequency."
+   ],
+   "explainer": {
+    "understandings": [
+     "Relative frequency lets groups of different sizes be compared.",
+     "A good graph shows the categories and the proportion in each without distortion."
+    ],
+    "misconceptions": [
+     "Using counts to compare groups of different sizes.",
+     "Calling a bar chart a histogram, or leaving bars in an order that suggests a trend."
+    ],
+    "processes": [
+     "Count each category, divide by the total, then graph with labelled axes."
+    ],
+    "exam": [
+     "Compare using relative frequencies and name the categories in context."
+    ]
+   },
+   "summary": "Relative frequencies, bar charts and pie charts describe how a categorical variable is spread across its categories. You calculate and interpret them and describe the trend you see. The activity looks at why more elite athletes are born between January and June, and asks you to explain it.",
+   "resources": [
+    {
+     "label": "1.A.2.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1BEhqbC6Cr-sor4p5Sqjk5fvib_TLu_lq/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.2.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/11uywzhrW2gQzxteq9ed5mtZnmoTBNyFn/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1RVL4T_CwQ9Y7pmF2DgOi_m27dMTEYjQA",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=B93gfiZsQDg"
+    },
+    {
+     "label": "Stats Hub 1.3",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=3"
+    },
+    {
+     "label": "Stats Hub 1.4",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=4"
+    },
+    {
+     "label": "Practice Library 1.A.2",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a11"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L3",
+   "n": 3,
+   "title": "Describing a Quantitative Variable",
+   "topic": "Describing a Quantitative Variable.",
+   "standards": [
+    {
+     "code": "CED 1.5",
+     "text": "Graphical representations for one quantitative variable"
+    },
+    {
+     "code": "CED 1.6",
+     "text": "Descriptions for one quantitative variable distributions"
+    }
+   ],
+   "skills": [
+    "Make and read dotplots, stemplots and histograms.",
+    "Describe shape, center, variability and unusual features (SOCV) in context."
+   ],
+   "explainer": {
+    "understandings": [
+     "A description has four parts: shape, center, variability, unusual features, all in context.",
+     "Histogram bin width changes the look, not the data."
+    ],
+    "misconceptions": [
+     "Describing the graph (tall bar on the left) instead of the distribution.",
+     "Calling a distribution skewed toward the side with the tail's opposite, mixing up skew direction."
+    ],
+    "processes": [
+     "Identify the overall pattern, then check the center, spread and any gaps or outliers."
+    ],
+    "exam": [
+     "Every description needs context and comparative language; a list of numbers is not a description."
+    ]
+   },
+   "summary": "Dotplots, stem-and-leaf plots and histograms show how a quantitative variable is distributed. You describe shape, center, spread and unusual features in context. The activity uses baseball team payrolls from the Moneyball season to show why Oakland's 2002 run was so unusual.",
+   "resources": [
+    {
+     "label": "1.A.3.APStats.Data",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "gsheet",
+       "href": "https://docs.google.com/spreadsheets/d/1EQWBP8FsXQy0r6bng4CAX2xRUJrkmzyIHDBqjcTCV5E/view"
+      },
+      {
+       "ext": "xlsx",
+       "href": "https://drive.google.com/file/d/1v5g7So1yxYA0gmCe_n93S74XH0IiUx2l/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.3.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/10yhSxg3PRsAGZNGhBwwRY5z4DXYR57zH/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.3.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1FZsBRoa28ZG_p1CxSPnROghm7aibyW1p/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1-yyV6HbgXXbDlLf1vzOtpwlgwCUDdLgT",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=49LBE76yx7c"
+    },
+    {
+     "label": "Stats Hub 1.5",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=5"
+    },
+    {
+     "label": "Stats Hub 1.6",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=6"
+    },
+    {
+     "label": "Practice Library 1.A.3",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a21"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L4",
+   "n": 4,
+   "title": "Measures of Center & Spread",
+   "topic": "Measures of Center & Spread.",
+   "standards": [
+    {
+     "code": "CED 1.7",
+     "text": "Summary statistics for one quantitative variable (center, spread, outliers)"
+    }
+   ],
+   "skills": [
+    "Compute and interpret mean, median, standard deviation, IQR and range.",
+    "Identify outliers with the 1.5 IQR rule and judge which summary suits the shape."
+   ],
+   "explainer": {
+    "understandings": [
+     "Resistant measures (median, IQR) are preferred for skewed data or outliers.",
+     "Standard deviation measures typical distance from the mean."
+    ],
+    "misconceptions": [
+     "Using the mean and standard deviation for a strongly skewed distribution.",
+     "Interpreting standard deviation as the average of the values."
+    ],
+    "processes": [
+     "Enter data in lists, run 1-Var Stats, then apply the 1.5 IQR fences by hand."
+    ],
+    "exam": [
+     "Interpret the statistic in context, not just state it; justify the choice of center and spread with shape."
+    ]
+   },
+   "summary": "The mean and median measure center, and the range, IQR, variance and standard deviation measure spread. You also use percentiles to place a value in a data set. The activity compares home prices from 1970 and 2024 to show wages have not kept pace, and asks how to preserve the American Dream.",
+   "resources": [
+    {
+     "label": "1.A.4.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/16M5xU3XNPU5zaSnYa400psmHXtlOv5ZU/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.4.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1q3K0FUPHGKx3hi3q5GtF_vjZonBCng7_/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1LQb6AVvM2VQ2_vjNwabULVfgi4VNUhCf",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=U_hjKd8LBtg"
+    },
+    {
+     "label": "Stats Hub 1.7",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=7"
+    },
+    {
+     "label": "Practice Library 1.A.4",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a31"
+    },
+    {
+     "label": "Optional video (measures by hand)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=YhrCbU0ORsA"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L5",
+   "n": 5,
+   "title": "Boxplots, Outliers, & Resistance",
+   "topic": "Boxplots, Outliers, & Resistance.",
+   "standards": [
+    {
+     "code": "CED 1.7",
+     "text": "Summary statistics for one quantitative variable (percentiles, z-scores)"
+    },
+    {
+     "code": "CED 1.8",
+     "text": "Graphical representations of summary statistics"
+    }
+   ],
+   "skills": [
+    "Draw and read boxplots using the five-number summary.",
+    "Compute and interpret percentiles and z-scores."
+   ],
+   "explainer": {
+    "understandings": [
+     "A boxplot shows spread through quartiles, and each section holds about a quarter of the data.",
+     "A z-score counts standard deviations from the mean."
+    ],
+    "misconceptions": [
+     "Reading box length as the amount of data in it, or reading a boxplot's tall whisker as more data.",
+     "Calling a z-score the percentile."
+    ],
+    "processes": [
+     "Find the five-number summary, mark fences, plot outliers separately, then draw whiskers to the last non-outlier."
+    ],
+    "exam": [
+     "Percentile and z-score interpretations need a full sentence in context."
+    ]
+   },
+   "summary": "The five-number summary builds boxplots and the 1.5 IQR rule flags outliers. You see how changing units affects summaries and which statistics resist outliers and skew. The activity asks how much money you will really make, and shows how easily a salary figure can mislead.",
+   "resources": [
+    {
+     "label": "1.A.5.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1aY1Aa3Gh_tg2OTg_khUYaHAUfL2OEgiJ/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.5.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1ACjzpzxKKRgZDgEauYfTAdRYhRrGwHdu/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1LgrZPL2Fyy_3uv_Z0rQUBh6krZw6_W-3",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=jy6SqcuHDLA"
+    },
+    {
+     "label": "Stats Hub 1.7",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=7"
+    },
+    {
+     "label": "Stats Hub 1.8",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=8"
+    },
+    {
+     "label": "Practice Library 1.A.5",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a41"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L6",
+   "n": 6,
+   "title": "Comparing Graphs & Z-Scores",
+   "topic": "Comparing Graphs & Z-Scores.",
+   "standards": [
+    {
+     "code": "CED 1.9",
+     "text": "Comparisons of the distributions for one quantitative variable"
+    }
+   ],
+   "skills": [
+    "Compare two or more distributions on shape, center, spread and outliers.",
+    "Choose a graph that supports the comparison."
+   ],
+   "explainer": {
+    "understandings": [
+     "Comparison needs both distributions addressed in the same sentence.",
+     "Side-by-side graphs on a common scale make shape, center and spread directly comparable."
+    ],
+    "misconceptions": [
+     "Describing each group separately with no comparing words.",
+     "Comparing only the centers."
+    ],
+    "processes": [
+     "Draw on a shared axis, then write one comparing sentence each for shape, center, spread and outliers."
+    ],
+    "exam": [
+     "Use words like higher, more variable, both skewed right; this is where FRQ marks are lost."
+    ]
+   },
+   "summary": "Comparing distributions means addressing shape, center and spread together, and z-scores let you compare values from different scales. You use both to compare players from different basketball eras. The activity is a debate on who is the greatest NBA scorer of all time, settled with data.",
+   "resources": [
+    {
+     "label": "1.A.6.APStats.Data",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "gsheet",
+       "href": "https://docs.google.com/spreadsheets/d/1d-dEitDtn2qt2Hq50yDS7hT1VzUSY9UkChQPder99w4/view"
+      },
+      {
+       "ext": "xlsx",
+       "href": "https://drive.google.com/file/d/1ycbnpouJ3R7zCEXFX4Bib85J2CngmFOJ/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.6.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1wq0rOtkbwLdhWFGEDVo9JwsTomG5R5Qn/view"
+      }
+     ]
+    },
+    {
+     "label": "1.A.6.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/19dfuhtutcGreSz-L_S2HiVHnYopplq7N/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1TtUwAzjIncdhw3cpHafHc-tN5Uk1AshH",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=g0U-eOE9n2s"
+    },
+    {
+     "label": "Stats Hub 1.9",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=9"
+    },
+    {
+     "label": "Practice Library 1.A.6",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-a&question=a51"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L7",
+   "n": 7,
+   "title": "Types of Studies",
+   "topic": "Types of Studies.",
+   "standards": [
+    {
+     "code": "CED 1.10",
+     "text": "The investigative question revisited and data collection"
+    }
+   ],
+   "skills": [
+    "Choose a data collection method (survey, observational study, experiment) that fits the question.",
+    "Define population, sample and parameter versus statistic."
+   ],
+   "explainer": {
+    "understandings": [
+     "The way data are collected decides what conclusions are allowed.",
+     "Only a randomized experiment can support cause and effect."
+    ],
+    "misconceptions": [
+     "Using observational data to claim causation.",
+     "Mixing up parameter and statistic."
+    ],
+    "processes": [
+     "Match the question to the design, then state the population the conclusion applies to."
+    ],
+    "exam": [
+     "Conclusions must match the design: generalizing needs random sampling, causation needs random assignment."
+    ]
+   },
+   "summary": "The way a study is designed decides what conclusions it can support. You compare observational studies and experiments, spot confounding variables, and judge when causal claims and generalizing are allowed. The activity uses Covid-19 data to ask how we know vaccines work.",
+   "resources": [
+    {
+     "label": "1.B.1.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1_qZjRCe_MhtCVyNhASdZ2CH9IQ9LGOBe/view"
+      }
+     ]
+    },
+    {
+     "label": "1.B.1.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1BvqzaChMuaEswROgdIi_SnYEwc1t_lve/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/16PsuW1aikbdoeSqw1ADbE2CDiu2N73iY",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=-GVqAyZ7a38"
+    },
+    {
+     "label": "Stats Hub 1.10",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=10"
+    },
+    {
+     "label": "Practice Library 1.B.1",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c01"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L8",
+   "n": 8,
+   "title": "Random Sampling",
+   "topic": "Random Sampling.",
+   "standards": [
+    {
+     "code": "CED 1.11",
+     "text": "Random sampling"
+    }
+   ],
+   "skills": [
+    "Describe simple random, stratified, cluster and systematic samples.",
+    "Carry out a random selection with a random number table or calculator."
+   ],
+   "explainer": {
+    "understandings": [
+     "Random selection protects against bias because chance, not the researcher, decides who is chosen.",
+     "Strata are chosen to be similar within, clusters to be mini-populations."
+    ],
+    "misconceptions": [
+     "Mixing up strata and clusters.",
+     "Calling a volunteer or convenience sample random."
+    ],
+    "processes": [
+     "Label the population, assign numbers, generate random numbers, skip repeats, select."
+    ],
+    "exam": [
+     "A sampling description must be specific enough for someone else to repeat it."
+    ]
+   },
+   "summary": "Simple, stratified, cluster and systematic random samples each select a sample by chance in a different way. You describe each method and tell bias from variation. The activity uses income data from your own city to ask what middle income means.",
+   "resources": [
+    {
+     "label": "1.B.2.APStats.Activity",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1HAleYfBMaJvUm6Ezo7kQAKOM5colAlNE/view"
+      }
+     ]
+    },
+    {
+     "label": "1.B.2.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1WgBf9eXCEi6LlAX334xQ2As6tSwlvr4j/view"
+      }
+     ]
+    },
+    {
+     "label": "1.B.2.APStats.PostActivityNotes",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1YuK4_Xx9II0cq25oFjfolYtEopF9w3vR/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1MyAIHw0ur6G0gRpNzBzmL-mfMjos1t6B",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=5dycK5ofBXM"
+    },
+    {
+     "label": "Stats Hub 1.11",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=11"
+    },
+    {
+     "label": "Practice Library 1.B.2",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c11"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L9",
+   "n": 9,
+   "title": "Bias & Nonrandom Sampling",
+   "topic": "Bias & Nonrandom Sampling.",
+   "standards": [
+    {
+     "code": "CED 1.12",
+     "text": "Potential problems with sampling"
+    }
+   ],
+   "skills": [
+    "Identify undercoverage, nonresponse, voluntary response and wording bias.",
+    "Explain the direction a bias pushes the result."
+   ],
+   "explainer": {
+    "understandings": [
+     "Bias is a flaw in the method, not a matter of sample size.",
+     "A large biased sample is still biased."
+    ],
+    "misconceptions": [
+     "Saying the sample is too small when the problem is bias.",
+     "Naming a bias type without the effect on the result."
+    ],
+    "processes": [
+     "Name the bias, tie it to the context, then say which way the estimate is pushed."
+    ],
+    "exam": [
+     "Name the bias and explain how it makes the result too high or too low."
+    ]
+   },
+   "summary": "A biased sample misleads however large it is. You identify undercoverage, nonresponse and voluntary response bias, plus response bias from question wording and self-reporting. The activity picks apart the statistics in college recruiting mailers and teaches you to ask what the sample was.",
+   "resources": [
+    {
+     "label": "1.B.3.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/17gtZT8sfIRCPW-Y_tV-KvUcwMX-PFEc8/view"
+      }
+     ]
+    },
+    {
+     "label": "1.B.3.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/10RCiCgskPFQ5CVf1TYn2LqWFXMbrHo3-/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1sw9fRRkS_Tj-9XTZPhk_YN3rg1JxiSBt",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=EA6xYeSHupQ"
+    },
+    {
+     "label": "Stats Hub 1.12",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=12"
+    },
+    {
+     "label": "Practice Library 1.B.3",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c21"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L10",
+   "n": 10,
+   "title": "Experimental Design",
+   "topic": "Experimental Design.",
+   "standards": [
+    {
+     "code": "CED 1.13",
+     "text": "Experimental design (part A)"
+    }
+   ],
+   "skills": [
+    "Identify explanatory and response variables, treatments, experimental units and confounding.",
+    "Distinguish an experiment from an observational study."
+   ],
+   "explainer": {
+    "understandings": [
+     "Random assignment, not random sampling, creates comparable groups.",
+     "A control group gives a baseline for comparison."
+    ],
+    "misconceptions": [
+     "Treating random sampling and random assignment as the same thing.",
+     "Ignoring confounding variables in an observational study."
+    ],
+    "processes": [
+     "List units, treatments and response, then say how treatments are assigned at random."
+    ],
+    "exam": [
+     "Say what is randomly assigned and why that rules out confounding."
+    ]
+   },
+   "summary": "A well-designed experiment controls extraneous variables with random assignment, a control group, replication, placebos and blinding. You describe the design and say what it allows you to conclude. The activity studies a Yale experiment that sent identical job applications under the names Jennifer and John.",
+   "resources": [
+    {
+     "label": "1.B.4.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1dEG5btq4rApxC2Yk40iC1LBCi8ody7HC/view"
+      }
+     ]
+    },
+    {
+     "label": "1.B.4.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1aCVxTTr7jhVbRsSPXEsZbOy5WyGGcqLj/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1JPV9ksLO6x5i8UCnNlhhOE3FzBOXNzh7",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=87T-AaEPjLQ"
+    },
+    {
+     "label": "Stats Hub 1.13",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=13"
+    },
+    {
+     "label": "Practice Library 1.B.4",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c31"
+    }
+   ],
+   "hideGuide": []
+  },
+  {
+   "id": "L11",
+   "n": 11,
+   "title": "Grouping in Experiments",
+   "topic": "Grouping in Experiments.",
+   "standards": [
+    {
+     "code": "CED 1.13",
+     "text": "Experimental design (parts B to D)"
+    }
+   ],
+   "skills": [
+    "Design completely randomized and randomized block experiments.",
+    "Use blinding, placebos and replication and explain what each does."
+   ],
+   "explainer": {
+    "understandings": [
+     "Blocking removes variability from a known source and makes comparisons fairer.",
+     "Replication reduces the role of chance in the results."
+    ],
+    "misconceptions": [
+     "Blocking by a variable that does not affect the response.",
+     "Confusing blocks with treatments."
+    ],
+    "processes": [
+     "Group units into blocks, randomize within each block, apply treatments, compare responses."
+    ],
+    "exam": [
+     "Randomize within blocks and say why each design feature is there."
+    ]
+   },
+   "summary": "Completely randomized, randomized block and matched pairs designs group experimental units in different ways to reduce variability. You choose a design and say why. The activity asks whether social media has hurt mental health, and shows how study design separates association from cause.",
+   "resources": [
+    {
+     "label": "1.B.5.APStats.Handout",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/17aNSTtww3Xg3paNxo6hHeQZDn38R_ZJe/view"
+      }
+     ]
+    },
+    {
+     "label": "1.B.5.APStats.MasteryChecks",
+     "audience": "student",
+     "files": [
+      {
+       "ext": "pdf",
+       "href": "https://drive.google.com/file/d/1X4Ts91tyrwZ6kVTbpUdW2whK1l3ut9PQ/view"
+      }
+     ]
+    }
+   ],
+   "folderUrl": "https://drive.google.com/drive/folders/1d60B9LFVy4eyOW-sCAF4upy2iEymGPVA",
+   "links": [
+    {
+     "label": "Lesson video (YouTube)",
+     "audience": "student",
+     "href": "https://www.youtube.com/watch?v=J3MvI9hLEjU"
+    },
+    {
+     "label": "Stats Hub 1.13",
+     "audience": "student",
+     "href": "https://broth11.github.io/AP-Statistics-Hub/lesson.html?v=13"
+    },
+    {
+     "label": "Practice Library 1.B.5",
+     "audience": "student",
+     "href": "https://broth11.github.io/practice-library/#course=ap-statistics&unit=1-b&question=c41"
+    }
+   ],
+   "hideGuide": []
+  }
+ ],
+ "unitResources": [
+  {
+   "label": "1B-FRQ Scoring-Guide",
+   "audience": "student",
+   "group": "Review",
+   "files": [
+    {
+     "ext": "pdf",
+     "href": "https://drive.google.com/file/d/11bYrAMuW5UzCh2-QaQ79kayQM8DhZYSq/view"
+    }
+   ]
+  },
+  {
+   "label": "1B-FRQ Set",
+   "audience": "student",
+   "group": "Review",
+   "files": [
+    {
+     "ext": "pdf",
+     "href": "https://drive.google.com/file/d/13IUdxYWF2ap2v93Aa_WI5b-eiiYoDNZR/view"
+    }
+   ]
+  },
+  {
+   "label": "FRQ (1.A.1 - 1.A.6)",
+   "audience": "student",
+   "group": "Review",
+   "files": [
+    {
+     "ext": "pdf",
+     "href": "https://drive.google.com/file/d/1ZXAUj4-mbAT2yBSFeVIP5jNy_6xWumod/view"
+    }
+   ]
+  },
+  {
+   "label": "FRQ (1.A.1 - 1.A.6) Self Check",
+   "audience": "student",
+   "group": "Review",
+   "files": [
+    {
+     "ext": "pdf",
+     "href": "https://drive.google.com/file/d/1QrDBaBu5v73OBiz5IP6w8Qyf9W3OGmH2/view"
+    }
+   ]
+  },
+  {
+   "label": "FRQ (1.B.1 - 1.B.5)",
+   "audience": "student",
+   "group": "Review",
+   "files": [
+    {
+     "ext": "pdf",
+     "href": "https://drive.google.com/file/d/1jDBcALA-fudngVW-iHrpSh_SL7ZIlCNX/view"
+    }
+   ]
+  },
+  {
+   "label": "FRQ (1.B.1 - 1.B.5) Self Check",
+   "audience": "student",
+   "group": "Review",
+   "files": [
+    {
+     "ext": "pdf",
+     "href": "https://drive.google.com/file/d/19NE4jcfIgoB6BChGu-qlcjRMIS9FJIVx/view"
+    }
+   ]
+  }
+ ]
+}
+</script>
+<!-- unit-data:end -->
+</body></html>
