@@ -149,10 +149,15 @@
           }).join('') + '</ul>';
       }).join('') + '</details>';
   }
+  function cedLink(s) {
+    var code = esc(s.code || '');
+    if (!D.cedPage || !s.ek || !s.ek.length) return code;
+    return '<a class="cedlink" href="' + D.cedPage + '#' + encodeURIComponent(String(s.code).replace('CED ', '')) + '">' + code + '</a>';
+  }
   function stdList(arr, open) {
     if (!arr.length) return '<p class="none">' + EMPTY + '</p>';
     return '<dl class="stds">' + arr.map(function (s) {
-      return '<dt>' + esc(s.code || '') + '</dt><dd>' + fmt(s.text || '') + '</dd>' + ekHtml(s, open);
+      return '<dt>' + cedLink(s) + '</dt><dd>' + fmt(s.text || '') + '</dd>' + ekHtml(s, open);
     }).join('') + '</dl>';
   }
 

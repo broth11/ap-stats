@@ -267,3 +267,4 @@ body.zoomed .board .c-title { view-transition-name: none; }
 .eks .ekc { display: block; font: 700 11.5px var(--mono); margin-bottom: 1px; }
 .eks img { max-width: 100%; height: auto; display: block; }
 @media (max-width: 600px) { .ek .lo { margin-left: 8%; } .eks { margin-left: 16%; } }
+a.cedlink { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
