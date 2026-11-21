@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5.4 Residuals</title>
+<style>
+  html, body { margin: 0; background: var(--surface, #fff); }
+  /* add ?transparent to the URL (or iframe src) for a see-through background */
+  html.transparent, html.transparent body { background: transparent; }
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  #card { width: min(100vw, 100vh, 640px); aspect-ratio: 1 / 1; cursor: pointer; }
+  svg { width: 100%; height: 100%; display: block; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div id="card" title="Click to pause or play"><svg id="s" viewBox="0 0 600 600" role="img" aria-label="A residual is the observed y minus the predicted y, shown as a vertical segment from each point to the line; points above the line have positive residuals and points below have negative residuals; a residual plot with no pattern supports a linear model and a curved residual plot suggests it is not the most appropriate model"></svg></div>
+<script>
+// Shared drawing + math kit. Embedded into every animation page via makeKit.toString().
+function makeKit(TEX, REC) {
+  /* animTheme(srcEl): semantic colors that follow the page theme. One source of truth, used in two places:
+     - pasted inside makeKit() of every animation page (srcEl = window.frameElement, the <iframe> in the CED block), and
+     - in the CED block's own script (srcEl = the .ced-anim element), so inline step images use the same colors.
+  
+     Page contract: the page defines six CSS custom properties on the iframe's ancestor (the .ced-anim block) -
+       --anim-ink      text, outlines, curves
+       --anim-surface  background the picture sits on
+       --anim-a        first series / population            (site orange)
+       --anim-b        second series / statistic            (site blue)
+       --anim-pos      "good" outcome (reject, capture)
+       --anim-neg      "bad" outcome  (fail to reject, miss)
+     Any CSS color syntax works. Missing or unreadable values fall back to DEF, which is the standalone look.
+  
+     Everything else is derived, so a new theme needs only those six values:
+       muted, line, dot, pale   mixes of ink and surface
+       a, b, pos, neg           the token, darkened toward ink only if needed to reach 3:1 on the surface (graphics)
+       at, bt, pt, nt           the same, darkened until 4.5:1 on the surface (text)  [WCAG AA]
+     Scenes use placeholders such as "@ink" and "@a"; resolve() swaps them for the current rgb() values. */
+  function animTheme(srcEl) {
+    var DEF = { ink: "#1f2a44", surface: "#ffffff", a: "#e8590c", b: "#1c7ed6", pos: "#2f9e44", neg: "#d6336c" };
+    var NAMES = ["ink", "surface", "a", "b", "pos", "neg"], TEXT = { "@a": "@at", "@b": "@bt", "@pos": "@pt", "@neg": "@nt" };
+    var self = { pal: {}, rgbs: {}, key: "", n: 19, dirty: false, onchange: null };
+    function parse(c) {
+      c = String(c).trim();
+      var m = c.match(/^#([0-9a-f]{3})$/i);
+      if (m) return m[1].split("").map(function (h) { return parseInt(h + h, 16); });
+      m = c.match(/^#([0-9a-f]{6})/i);
+      if (m) return [0, 2, 4].map(function (i) { return parseInt(m[1].substr(i, 2), 16); });
+      m = c.match(/[\d.]+/g);
+      return m && m.length >= 3 ? m.slice(0, 3).map(function (v) { return Math.round(+v); }) : null;
+    }
+    function chan(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    function lum(p) { return 0.2126 * chan(p[0]) + 0.7152 * chan(p[1]) + 0.0722 * chan(p[2]); }
+    function ratio(p, q) { var a = lum(p), b = lum(q); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
+    function mix(p, q, t) { return p.map(function (v, i) { return Math.round(v + (q[i] - v) * t); }); }
+    function css(p) { return "rgb(" + p.join(",") + ")"; }
+    // the lightest change toward the ink that reaches the wanted contrast on the surface
+    function fix(fg, bg, ink, want) { for (var i = 0; i <= 20; i++) { var c = mix(fg, ink, i / 20); if (ratio(c, bg) >= want) return c; } return ink; }
+    function toRgb(v) {   // any CSS color -> [r,g,b], via the browser's own parser
+      if (!v) return null;
+      var p = parse(v); if (/^#|^rgb\(/i.test(String(v).trim()) && p) return p;
+      try {
+        var el = document.createElement("span"); el.style.color = v; if (!el.style.color) return null;
+        document.body.appendChild(el); var c = getComputedStyle(el).color; document.body.removeChild(el); return parse(c);
+      } catch (e) { return null; }
+    }
+    function build(t) {
+      var ink = t.ink, s = t.surface, P = {}, R = {};
+      R.ink = ink; R.surface = s;
+      R.muted = fix(mix(ink, s, 0.30), s, ink, 4.5); R.line = mix(ink, s, 0.78); R.dot = mix(ink, s, 0.66); R.pale = mix(ink, s, 0.88);
+      [["a", "at"], ["b", "bt"], ["pos", "pt"], ["neg", "nt"]].forEach(function (x) { R[x[0]] = fix(t[x[0]], s, ink, 3); R[x[1]] = fix(t[x[0]], s, ink, 4.5); });
+      Object.keys(R).forEach(function (n) { P[n] = css(R[n]); });
+      self.pal = P; self.rgbs = R;
+    }
+    self.defaults = DEF; self.parse = parse; self.ratio = ratio;
+    self.rgb = function (name) { name = String(name); return self.rgbs[name.charAt(0) === "@" ? name.slice(1) : name] || parse(name) || [0, 0, 0]; };   // "@b" or "b" or any css color
+    self.text = function (c) { return TEXT[c] || c; };   // text on the surface uses the 4.5:1 variant of an accent
+    self.resolve = function (s) { return s.replace(/@(ink|surface|muted|line|dot|pale|a|b|pos|neg|at|bt|pt|nt)\b/g, function (m, n) { return self.pal[n]; }); };
+    // read the six tokens from srcEl; true when something changed
+    self.read = function () {
+      var cs = null;
+      try { if (srcEl) cs = srcEl.ownerDocument.defaultView.getComputedStyle(srcEl); } catch (e) { cs = null; }
+      var t = {};
+      NAMES.forEach(function (n) { var v = cs && cs.getPropertyValue("--anim-" + n); t[n] = toRgb(v && v.trim()) || parse(DEF[n]); });
+      var key = NAMES.map(function (n) { return t[n].join(","); }).join("|");
+      if (key === self.key) return false;
+      self.key = key; build(t); if (self.onchange) self.onchange(self.pal); return true;
+    };
+    // call once per drawn frame: reads at first use, on a change signal, and every 20th frame (covers a swapped stylesheet)
+    self.poll = function () { if (!self.key || self.dirty || ++self.n % 20 === 0) { self.dirty = false; return self.read(); } return false; };
+    // change signals: class/style/data-theme edits on the page, and the page's light/dark setting
+    self.watch = function () {
+      try {
+        var d = srcEl.ownerDocument, w = d.defaultView, flag = function () { self.dirty = true; };
+        if (w.MutationObserver) { var mo = new w.MutationObserver(flag), o = { attributes: true, attributeFilter: ["class", "style", "data-theme"], subtree: false }; mo.observe(d.documentElement, o); if (d.body) mo.observe(d.body, o); var host = srcEl.closest && srcEl.closest(".ced-anim"); if (host) mo.observe(host, o); }
+        if (w.matchMedia) { var mq = w.matchMedia("(prefers-color-scheme: dark)"); if (mq.addEventListener) mq.addEventListener("change", flag); else if (mq.addListener) mq.addListener(flag); }
+      } catch (e) { /* standalone page or cross-origin parent: the periodic poll and defaults still work */ }
+    };
+    self.read();
+    return self;
+  }
+  const TH = animTheme((() => { try { return typeof window !== "undefined" ? window.frameElement : null; } catch (e) { return null; } })());
+  const INK = "@ink", GRAY = "@muted", BLUE = "@b", ORANGE = "@a", PALE = "@pale", GREEN = "@pos", PINK = "@neg", LINE = "@line", DOT = "@dot";
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  const pr = (t, a, b) => clamp((t - a) / (b - a));
+  const e = (t, a, b) => ease(pr(t, a, b));
+  const win = (t, a, b, f = .3) => clamp((t - a) / f) * (1 - clamp((t - (b - f)) / f));
+  const mixc = (a, b, t) => {
+    const pa = TH.rgb(a), pb = TH.rgb(b);
+    return "rgb(" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",") + ")";
+  };
+  const n1 = v => (Math.round(v * 10) / 10).toFixed(1);
+  const f = (v, d = 2) => v.toFixed(d);
+  const op = o => (o && o.op != null && o.op < 1) ? ` opacity="${Math.max(0, o.op).toFixed(3)}"` : "";
+  // ---- TeX labels -------------------------------------------------------------------------------------------
+  // TEX = glyph data rendered by MathJax at build time (see tex.js); REC = build-time recorder; MISS = formulas not found.
+  const MISS = [];
+  const SUB = "₀₁₂₃₄₅₆₇₈₉ₐₙᵢ", SUBV = "0123456789ani";
+  const GREEK = { "μ": "\\mu", "σ": "\\sigma", "ρ": "\\rho", "β": "\\beta", "α": "\\alpha", "χ": "\\chi", "Σ": "\\sum", "π": "\\pi", "λ": "\\lambda", "θ": "\\theta" };
+  const OPS = { "−": "-", "÷": "\\div", "·": "\\cdot", "×": "\\times", "≠": "\\ne", "≈": "\\approx", "≥": "\\ge", "≤": "\\le", "±": "\\pm", "→": "\\to", "∞": "\\infty" };
+  const MATHCH = /[\u0302\u0304μσρβαχΣπλθ²³√≥≤≠≈±×÷ŷȳ₀-₉ₐₙᵢ]/;
+  const hasMath = s => !/<[a-z]/i.test(s) && (MATHCH.test(s) || /(^|[\s(])[A-Za-z]\s*[=<>]\s*[-−\d(]/.test(s) || /^[A-Za-z]\s*=\s/.test(s) || /(^|\s)P\(/.test(s) || /(^|[\s(])[pnxyzrkXYt]($|[\s,.;:)])/.test(s) || /(^|\s)[A-Za-z]\*/.test(s) || /(^|\s)\d[\d.]*[A-Za-z]($|[\s,.;:)])/.test(s));
+  const isOp = t => /^(=|<|>|\+|−|×|÷|\/|≈|≥|≤|≠|±|·|\*)$/.test(t);
+  const isNum = t => /^[-−+]?[\d][\d.,%/]*$/.test(t);
+  const mathTok = t => MATHCH.test(t) || /^[A-Za-z]$/.test(t) && !/^[aAI]$/.test(t) || /^[A-Za-z]\(/.test(t) || /^[A-Za-z]\*$/.test(t) || /^\d[\d.]*[A-Za-z]$/.test(t) || /^[A-Za-z]\d$/.test(t) || isOp(t);
+  const toTex = m => {   // unicode math text -> TeX math
+    let u = m;
+    for (let i = u.indexOf("√"); i >= 0; i = u.indexOf("√", i + 1)) {   // sqrt with a bracket group or a plain atom
+      let j = i + 1, inner;
+      if (u[j] === "(") { let d = 0, k = j; for (; k < u.length; k++) { if (u[k] === "(") d++; if (u[k] === ")" && --d === 0) break; } inner = u.slice(j + 1, k); u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(k + 1); }
+      else { const mm = u.slice(j).match(/^[A-Za-z0-9.μσ\u0302\u0304₀-₉ₐₙᵢ²]+/); inner = mm ? mm[0] : ""; u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(j + inner.length); }
+    }
+    u = u.replace(/p̂c/g, "\\hat{p}_{c}").replace(/([A-Za-z])\u0302/g, "\\hat{$1}").replace(/([A-Za-z])\u0304/g, "\\bar{$1}").replace(/ŷ/g, "\\hat{y}").replace(/ȳ/g, "\\bar{y}");
+    u = u.replace(new RegExp("[" + SUB + "]+", "g"), r => "_{" + r.split("").map(c => SUBV[SUB.indexOf(c)]).join("") + "}");
+    u = u.replace(/²/g, "^{2}").replace(/³/g, "^{3}").replace(/([A-Za-z])\*/g, "$1^{*}").replace(/(\d),(\d)/g, "$1{,}$2").replace(/%/g, "\\%");
+    u = u.replace(/[μσρβαχΣπλθ]/g, c => GREEK[c] + " ").replace(/[−÷·×≠≈≥≤±→∞]/g, c => OPS[c] + " ");
+    u = u.replace(/:( ?)/g, (m, sp) => "{:}" + (sp ? "\\ " : "")).replace(/([,;]) /g, "$1\\ ");
+    return u.replace(/ +/g, " ").trim();
+  };
+  const toText = p => "\\textsf{" + p.replace(/[\\{}]/g, "").replace(/([%&#_$])/g, "\\$1") + "}";
+  const u2tex = src => {
+    const str = String(src).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    const toks = str.split(/ +/).map(t => { const m = t.match(/^([("“]*)(.*?)([,.;:!?)"”]*)$/); return { lead: m[1], core: m[2], trail: m[3], raw: t }; });
+    toks.forEach(k => { k.type = !k.core ? "n" : mathTok(k.core) ? "m" : isNum(k.core) ? "n" : "p"; });
+    toks.forEach((k, i) => { if (k.type === "n") { const a = toks[i - 1], b = toks[i + 1]; k.type = (a && a.type === "m") || (b && b.type === "m") ? "m" : "p"; } });
+    // a bracket opened by a math token keeps the tokens up to its closing bracket together as maths (e.g. "(x̄ − μ₀)")
+    const runs = [];
+    toks.forEach(k => { const last = runs[runs.length - 1]; if (last && last.type === k.type) last.t.push(k.raw); else runs.push({ type: k.type, t: [k.raw] }); });
+    let out = "";
+    runs.forEach((r, i) => {
+      const body = r.t.join(" ");
+      if (r.type === "m") {
+        const first = r.t[0].replace(/^[("“]+/, ""), prev = runs[i - 1], next = runs[i + 1];
+        const relFirst = isOp(first), relLast = isOp(r.t[r.t.length - 1]);
+        out += toTex(body.replace(/[“”]/g, '"'));
+        if (next && !relLast) out += "\\ ";
+        if (next && relLast) out += "";
+      } else {
+        const prev = runs[i - 1], nextr = runs[i + 1];
+        const pm = prev && prev.type === "m", relBefore = pm && isOp(prev.t[prev.t.length - 1]);
+        out += toText(body + (nextr && !(nextr.type === "m" && isOp(nextr.t[0].replace(/^[("“]+/, ""))) ? " " : ""));
+      }
+    });
+    return out;
+  };
+  const M = (x, y, tex, o = {}) => {
+    if (REC) { REC[tex] = 1; return ""; }
+    const g = TEX && TEX[tex]; if (!g) { if (MISS.length < 50) MISS.push(tex); return ""; }
+    const s = (o.size || 22) / 1000, a = o.anchor || "middle";
+    const dx = a === "start" ? g.x : a === "end" ? g.x + g.w : g.x + g.w / 2;
+    const body = (c, b, sw) => `<g color="${c}">${sw != null ? g.b.replace('stroke-width="0"', 'stroke-width="' + sw + '"') : g.b}</g>`;
+    return `<g transform="translate(${(x - dx * s).toFixed(1)},${(+y).toFixed(1)}) scale(${s})"${op(o)}>${o.halo ? body("@surface", 0, (7 / s).toFixed(0)) : ""}${body(TH.text(o.fill || INK), 0, o.bold || null)}</g>`;
+  };
+  const Mw = (tex, size = 22) => (TEX && TEX[tex]) ? TEX[tex].w * size / 1000 : 0;
+  const boldOf = w => w >= 800 ? 44 : w >= 700 ? 34 : w >= 600 ? 24 : w >= 500 ? 14 : 0;
+  const TXT = (x, y, s, o = {}) => `<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" font-size="${o.size || 24}" font-weight="${o.w || 600}" fill="${TH.text(o.fill || INK)}" text-anchor="${o.anchor || "middle"}"${o.mono ? ' class="mono"' : ""}${o.halo ? ' stroke="@surface" stroke-width="7" paint-order="stroke" stroke-linejoin="round"' : ""}${op(o)}>${s}</text>`;
+  // Tn: like T for a label whose numbers change every frame. Wrap the changing part in braces: Tn(x, y, "n = {" + n + "} per group").
+  // Fixed parts are typeset as a whole; the braced part is drawn digit by digit from shared glyphs (so a page stays small).
+  const Tn = (x, y, s, o = {}) => {
+    const size = (o.size || 24) * 1.08, gapU = size * 0.28;
+    const raw = String(s).split(/(\$[^$]*\$)/), parts = [];   // $...$ is raw TeX; {...} marks the part that changes
+    raw.forEach(r => { if (r[0] === "$" && r.length > 1) parts.push(r); else r.split(/(\{[^}]*\})/).forEach(q => parts.push(q)); });
+    const pcs = parts.filter(p => p !== "").map(p => {
+      if (p[0] === "{" && p[p.length - 1] === "}") return { d: p.slice(1, -1).replace(/−/g, "-").split("") };
+      const lead = Math.min(4, (p.match(/^ */)[0]).length), trail = Math.min(4, (p.match(/ *$/)[0]).length), core = p.trim();
+      return core ? { tex: core[0] === "$" ? core.slice(1, -1) : u2tex(core), lead, trail } : { tex: "", lead: 0, trail: 0, skip: true };
+    }).filter(p => !p.skip);
+    if (REC) { pcs.forEach(p => { if (p.tex) REC[p.tex] = 1; else p.d.forEach(c => { REC[c] = 1; }); }); return ""; }
+    const ok = pcs.every(p => p.tex ? TEX[p.tex] : p.d.every(c => TEX[c]));
+    if (!ok) { if (MISS.length < 50) MISS.push(String(s)); return TXT(x, y, String(s).replace(/[{}]/g, ""), o); }
+    const items = []; let w = 0;
+    pcs.forEach((p, i) => {
+      if (p.tex) { if (i > 0 && p.lead) w += gapU * p.lead; items.push({ k: p.tex, x: w }); w += TEX[p.tex].w * size / 1000; if (i < pcs.length - 1 && p.trail) w += gapU * p.trail; }
+      else p.d.forEach(c => { items.push({ k: c, x: w }); w += TEX[c].w * size / 1000; });
+    });
+    const a = o.anchor || "middle", x0 = a === "start" ? x : a === "end" ? x - w : x - w / 2;
+    return items.map(it => M(x0 + it.x, y, it.k, { size, anchor: "start", fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null })).join("");
+  };
+  // T draws text. A string containing maths notation (x̄, μ, ², √, "n = 25", ...) is typeset with the build-time TeX glyphs; if a formula is missing it falls back to plain text.
+  const T = (x, y, s, o = {}) => {
+    const str = String(s);
+    if (/\$[^$]+\$/.test(str)) return Tn(x, y, str, o);
+    if ((REC || TEX) && hasMath(str)) {
+      const tex = u2tex(str);
+      if (REC) { REC[tex] = 1; return ""; }
+      if (TEX[tex]) return M(x, y, tex, { size: (o.size || 24) * 1.08, anchor: o.anchor, fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null, halo: o.halo });
+      if (MISS.length < 50) MISS.push(tex);
+    }
+    return TXT(x, y, str, o);
+  };
+  const R = (x, y, w, h, o = {}) => `<rect x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" width="${Math.max(0, w).toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="${o.rx || 0}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2.5}"${op(o)}/>`;
+  const L = (x1, y1, x2, y2, o = {}) => `<line x1="${(+x1).toFixed(1)}" y1="${(+y1).toFixed(1)}" x2="${(+x2).toFixed(1)}" y2="${(+y2).toFixed(1)}" stroke="${o.stroke || INK}" stroke-width="${o.sw || 2.5}" stroke-linecap="round"${o.dash ? ` stroke-dasharray="${o.dash}"` : ""}${op(o)}/>`;
+  const C = (cx, cy, r, o = {}) => `<circle cx="${(+cx).toFixed(1)}" cy="${(+cy).toFixed(1)}" r="${Math.max(0, r).toFixed(1)}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2}"${op(o)}/>`;
+  const P = (d, o = {}) => `<path d="${d}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 3}" stroke-linejoin="round" stroke-linecap="round"${op(o)}/>`;
+  const G = (inner, o = {}) => `<g transform="translate(${(o.tx || 0).toFixed(1)},${(o.ty || 0).toFixed(1)})${o.s ? ` scale(${o.s})` : ""}"${op(o)}>${inner}</g>`;
+  const A = (x1, y1, x2, y2, o = {}) => {
+    const a = Math.atan2(y2 - y1, x2 - x1), h = o.head || 12, c = o.stroke || INK;
+    return L(x1, y1, x2 - Math.cos(a) * h * .6, y2 - Math.sin(a) * h * .6, o) +
+      `<polygon points="${x2.toFixed(1)},${y2.toFixed(1)} ${(x2 - h * Math.cos(a - .45)).toFixed(1)},${(y2 - h * Math.sin(a - .45)).toFixed(1)} ${(x2 - h * Math.cos(a + .45)).toFixed(1)},${(y2 - h * Math.sin(a + .45)).toFixed(1)}" fill="${c}"${op(o)}/>`;
+  };
+  const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) * (r1 - r0) / (d1 - d0);
+  const xaxis = (X, y, vals, o = {}) => {
+    let s = L(X(vals[0]) - (o.pad || 0), y, X(vals[vals.length - 1]) + (o.pad || 0), y, { sw: 3 });
+    vals.forEach(v => { s += L(X(v), y, X(v), y + 7, { sw: 2.5 }) + T(X(v), y + (o.dy || 28), o.fmt ? o.fmt(v) : v, { size: o.size || 18, fill: o.fill || INK }); });
+    return s;
+  };
+  const curve = (fn, a, b, X, Y, n = 120) => { let d = ""; for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += (i ? "L" : "M") + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d; };
+  const area = (fn, a, b, X, Y, y0, n = 90) => { let d = "M" + X(a).toFixed(1) + " " + y0.toFixed(1); for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += "L" + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d + "L" + X(b).toFixed(1) + " " + y0.toFixed(1) + "Z"; };
+
+  // ---- math ----
+  const erf = x => { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + .3275911 * x); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x); return s * y; };
+  const nPDF = (x, m = 0, s = 1) => Math.exp(-.5 * ((x - m) / s) ** 2) / (s * Math.sqrt(2 * Math.PI));
+  const nCDF = (x, m = 0, s = 1) => .5 * (1 + erf((x - m) / (s * Math.SQRT2)));
+  const lgamma = z => { const g = 7, c = [.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7]; if (z < .5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z); z -= 1; let x = c[0]; for (let i = 1; i < g + 2; i++) x += c[i] / (z + i); const t = z + g + .5; return .5 * Math.log(2 * Math.PI) + (z + .5) * Math.log(t) - t + Math.log(x); };
+  const tPDF = (x, df) => Math.exp(lgamma((df + 1) / 2) - lgamma(df / 2)) / Math.sqrt(df * Math.PI) * Math.pow(1 + x * x / df, -(df + 1) / 2);
+  const tUpper = (x, df) => { // P(T > x) by Simpson integration
+    const b = 300, n = 3000, h = (b - x) / n; let s = tPDF(x, df) + tPDF(b, df);
+    for (let i = 1; i < n; i++) s += tPDF(x + i * h, df) * (i % 2 ? 4 : 2); return s * h / 3;
+  };
+  const tCDF = (x, df) => x >= 0 ? 1 - tUpper(x, df) : tUpper(-x, df);
+  const gammaP = (a, x) => { // regularized lower incomplete gamma
+    if (x <= 0) return 0; const gln = lgamma(a);
+    if (x < a + 1) { let ap = a, sum = 1 / a, del = sum; for (let n = 0; n < 200; n++) { ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-12) break; } return sum * Math.exp(-x + a * Math.log(x) - gln); }
+    let b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+    for (let i = 1; i < 200; i++) { const an = -i * (i - a); b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-12) break; }
+    return 1 - Math.exp(-x + a * Math.log(x) - gln) * h;
+  };
+  const chiPDF = (x, k) => x <= 0 ? 0 : Math.exp((k / 2 - 1) * Math.log(x) - x / 2 - (k / 2) * Math.log(2) - lgamma(k / 2));
+  const chiCDF = (x, k) => gammaP(k / 2, x / 2);
+  const choose = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+  const binom = (n, k, p) => choose(n, k) * Math.pow(p, k) * Math.pow(1 - p, n - k);
+  const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const randn = r => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+  const shuffle = (a, r) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); };
+  const med = a => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  const five = a => { const s = a.slice().sort((x, y) => x - y), n = s.length, h = Math.floor(n / 2); return [s[0], med(s.slice(0, h)), med(s), med(s.slice(n - h)), s[n - 1]]; };
+  const corr = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0, syy = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; syy += (y[i] - my) ** 2; }); return sxy / Math.sqrt(sxx * syy); };
+  const lsrl = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; }); const b = sxy / sxx; return { a: my - b * mx, b }; };
+  const fmtp = p => p < .001 ? "< 0.001" : p.toFixed(3);
+  return { INK, GRAY, BLUE, ORANGE, PALE, GREEN, PINK, LINE, DOT, TH, resolve: s => (typeof window !== "undefined" && window.__keepTokens) ? s : TH.resolve(s), clamp, ease, pr, e, win, mixc, n1, f, T, R, L, C, P, G, A, lin, xaxis, curve, area, M, Mw, Tn, MISS, u2tex, hasMath,
+    erf, nPDF, nCDF, lgamma, tPDF, tCDF, tUpper, chiPDF, chiCDF, choose, binom, rng, randn, shuffle, mean, sd, med, five, corr, lsrl, fmtp };
+}
+
+(function () {
+  var K = makeKit({"\\textsf{Hours studied }(x)":{"x":0,"w":7278,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mtext\"><path data-c=\"1D5A7\" d=\"M86 0V694H190V399H517V694H621V0H517V323H190V0H86Z\"></path><path data-c=\"1D5C8\" d=\"M28 222Q28 323 95 391T244 460Q275 460 281 459Q364 445 417 377T471 219Q471 124 408 57T250 -10Q158 -10 93 57T28 222ZM377 230Q377 277 364 310T328 358T287 379T248 385Q233 385 219 382T186 369T155 342T132 297T122 230Q122 146 159 108T250 69H253Q263 69 274 70T305 81T339 106T365 154T377 230Z\" transform=\"translate(708,0)\"></path><path data-c=\"1D5CE\" d=\"M353 39Q352 38 344 34T331 27T315 19T295 11T270 3T241 -3T207 -8T168 -10H162Q148 -10 137 -8T111 2T87 30T74 81Q73 89 73 268V444H166V268L167 92Q171 79 174 74T192 64T238 59Q317 59 344 116Q349 128 349 148T350 291V444H443V0H353V39Z\" transform=\"translate(1208,0)\"></path><path data-c=\"1D5CB\" d=\"M171 389Q237 455 320 455H327V373H317Q262 369 220 336T167 248Q165 239 164 119V0H74V450H159V377L171 389Z\" transform=\"translate(1725,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(2067,0)\"></path><path data-c=\"20\" d=\"\" transform=\"translate(2450,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(2700,0)\"></path><path data-c=\"1D5CD\" d=\"M333 27Q333 24 314 16T257 -1T184 -10H172Q146 -10 128 14T105 58T99 91Q95 113 95 251V371H18V444H98V571H182V444H316V371H182V253Q183 128 189 104Q199 68 234 68Q277 72 314 98Q315 93 323 61T333 27Z\" transform=\"translate(3083,0)\"></path><path data-c=\"1D5CE\" d=\"M353 39Q352 38 344 34T331 27T315 19T295 11T270 3T241 -3T207 -8T168 -10H162Q148 -10 137 -8T111 2T87 30T74 81Q73 89 73 268V444H166V268L167 92Q171 79 174 74T192 64T238 59Q317 59 344 116Q349 128 349 148T350 291V444H443V0H353V39Z\" transform=\"translate(3444,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(3961,0)\"></path><path data-c=\"1D5C2\" d=\"M67 576V680H171V576H67ZM74 0V444H164V0H74Z\" transform=\"translate(4478,0)\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(4717,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(5161,0)\"></path><path data-c=\"A0\" d=\"\" transform=\"translate(5678,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(5928,0)\"><path data-c=\"28\" d=\"M94 250Q94 319 104 381T127 488T164 576T202 643T244 695T277 729T302 750H315H319Q333 750 333 741Q333 738 316 720T275 667T226 581T184 443T167 250T184 58T225 -81T274 -167T316 -220T333 -241Q333 -250 318 -250H315H302L274 -226Q180 -141 137 -14T94 250Z\"></path></g><g data-mml-node=\"mi\" transform=\"translate(6317,0)\"><path data-c=\"1D465\" d=\"M52 289Q59 331 106 386T222 442Q257 442 286 424T329 379Q371 442 430 442Q467 442 494 420T522 361Q522 332 508 314T481 292T458 288Q439 288 427 299T415 328Q415 374 465 391Q454 404 425 404Q412 404 406 402Q368 386 350 336Q290 115 290 78Q290 50 306 38T341 26Q378 26 414 59T463 140Q466 150 469 151T485 153H489Q504 153 504 145Q504 144 502 134Q486 77 440 33T333 -11Q263 -11 227 52Q186 -10 133 -10H127Q78 -10 57 16T35 71Q35 103 54 123T99 143Q142 143 142 101Q142 81 130 66T107 46T94 41L91 40Q91 39 97 36T113 29T132 26Q168 26 194 71Q203 87 217 139T245 247T261 313Q266 340 266 352Q266 380 251 392T217 404Q177 404 142 372T93 290Q91 281 88 280T72 278H58Q52 284 52 289Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(6889,0)\"><path data-c=\"29\" d=\"M60 749L64 750Q69 750 74 750H86L114 726Q208 641 251 514T294 250Q294 182 284 119T261 12T224 -76T186 -143T145 -194T113 -227T90 -246Q87 -249 86 -250H74Q66 -250 63 -250T58 -247T55 -238Q56 -237 66 -225Q221 -64 221 250T66 725Q56 737 55 738Q55 746 60 749Z\"></path></g></g></g>"},"\\textsf{Residual plots: residual against }x":{"x":0,"w":13440,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mtext\"><path data-c=\"1D5B1\" d=\"M88 0V694H227H259H302Q365 694 399 689T474 663Q528 637 558 595T589 504Q589 482 584 462T569 426T547 396T522 372T495 353T470 338T449 328T434 322L429 320L440 300Q452 280 477 238T523 160L617 1L565 0Q513 0 512 1Q512 2 424 156L337 309H189V0H88ZM492 504Q492 600 367 620Q354 622 271 623H189V385H271Q363 386 388 392Q432 402 462 430T492 504Z\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(646,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(1090,0)\"></path><path data-c=\"1D5C2\" d=\"M67 576V680H171V576H67ZM74 0V444H164V0H74Z\" transform=\"translate(1473,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(1712,0)\"></path><path data-c=\"1D5CE\" d=\"M353 39Q352 38 344 34T331 27T315 19T295 11T270 3T241 -3T207 -8T168 -10H162Q148 -10 137 -8T111 2T87 30T74 81Q73 89 73 268V444H166V268L167 92Q171 79 174 74T192 64T238 59Q317 59 344 116Q349 128 349 148T350 291V444H443V0H353V39Z\" transform=\"translate(2229,0)\"></path><path data-c=\"1D5BA\" d=\"M236 387Q209 387 184 382T141 370T111 355T91 342T83 337L82 355Q80 373 79 393T77 417Q77 419 81 421Q86 423 91 426Q155 460 227 460H238Q319 460 368 400Q393 371 400 341T408 252Q408 240 408 207T407 152V0H317V39L306 32Q244 -10 159 -10H152Q109 -10 77 22Q38 61 38 126Q38 142 39 146Q55 199 130 223T295 252H314V277Q314 305 313 310Q308 342 287 364T236 387ZM303 186Q124 180 124 126Q124 105 144 86T208 66Q284 66 309 124Q314 137 314 166V186H303Z\" transform=\"translate(2746,0)\"></path><path data-c=\"1D5C5\" d=\"M74 0V694H164V0H74Z\" transform=\"translate(3227,0)\"></path><path data-c=\"20\" d=\"\" transform=\"translate(3466,0)\"></path><path data-c=\"1D5C9\" d=\"M166 404Q194 424 241 439T337 455H341Q410 455 451 370Q483 307 483 222Q483 128 433 59T306 -10Q282 -10 260 -5T222 7T194 21T176 33T168 38V-194H75V444H165V424L166 404ZM390 222Q390 287 354 331T266 376T177 340L168 332V118Q200 66 257 66Q313 66 351 112T390 222Z\" transform=\"translate(3716,0)\"></path><path data-c=\"1D5C5\" d=\"M74 0V694H164V0H74Z\" transform=\"translate(4233,0)\"></path><path data-c=\"1D5C8\" d=\"M28 222Q28 323 95 391T244 460Q275 460 281 459Q364 445 417 377T471 219Q471 124 408 57T250 -10Q158 -10 93 57T28 222ZM377 230Q377 277 364 310T328 358T287 379T248 385Q233 385 219 382T186 369T155 342T132 297T122 230Q122 146 159 108T250 69H253Q263 69 274 70T305 81T339 106T365 154T377 230Z\" transform=\"translate(4472,0)\"></path><path data-c=\"1D5CD\" d=\"M333 27Q333 24 314 16T257 -1T184 -10H172Q146 -10 128 14T105 58T99 91Q95 113 95 251V371H18V444H98V571H182V444H316V371H182V253Q183 128 189 104Q199 68 234 68Q277 72 314 98Q315 93 323 61T333 27Z\" transform=\"translate(4972,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(5333,0)\"></path><path data-c=\"3A\" d=\"M90 346V444H188V346H90ZM90 0V98H188V0H90Z\" transform=\"translate(5716,0)\"></path><path data-c=\"20\" d=\"\" transform=\"translate(5994,0)\"></path><path data-c=\"1D5CB\" d=\"M171 389Q237 455 320 455H327V373H317Q262 369 220 336T167 248Q165 239 164 119V0H74V450H159V377L171 389Z\" transform=\"translate(6244,0)\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(6586,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(7030,0)\"></path><path data-c=\"1D5C2\" d=\"M67 576V680H171V576H67ZM74 0V444H164V0H74Z\" transform=\"translate(7413,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(7652,0)\"></path><path data-c=\"1D5CE\" d=\"M353 39Q352 38 344 34T331 27T315 19T295 11T270 3T241 -3T207 -8T168 -10H162Q148 -10 137 -8T111 2T87 30T74 81Q73 89 73 268V444H166V268L167 92Q171 79 174 74T192 64T238 59Q317 59 344 116Q349 128 349 148T350 291V444H443V0H353V39Z\" transform=\"translate(8169,0)\"></path><path data-c=\"1D5BA\" d=\"M236 387Q209 387 184 382T141 370T111 355T91 342T83 337L82 355Q80 373 79 393T77 417Q77 419 81 421Q86 423 91 426Q155 460 227 460H238Q319 460 368 400Q393 371 400 341T408 252Q408 240 408 207T407 152V0H317V39L306 32Q244 -10 159 -10H152Q109 -10 77 22Q38 61 38 126Q38 142 39 146Q55 199 130 223T295 252H314V277Q314 305 313 310Q308 342 287 364T236 387ZM303 186Q124 180 124 126Q124 105 144 86T208 66Q284 66 309 124Q314 137 314 166V186H303Z\" transform=\"translate(8686,0)\"></path><path data-c=\"1D5C5\" d=\"M74 0V694H164V0H74Z\" transform=\"translate(9167,0)\"></path><path data-c=\"20\" d=\"\" transform=\"translate(9406,0)\"></path><path data-c=\"1D5BA\" d=\"M236 387Q209 387 184 382T141 370T111 355T91 342T83 337L82 355Q80 373 79 393T77 417Q77 419 81 421Q86 423 91 426Q155 460 227 460H238Q319 460 368 400Q393 371 400 341T408 252Q408 240 408 207T407 152V0H317V39L306 32Q244 -10 159 -10H152Q109 -10 77 22Q38 61 38 126Q38 142 39 146Q55 199 130 223T295 252H314V277Q314 305 313 310Q308 342 287 364T236 387ZM303 186Q124 180 124 126Q124 105 144 86T208 66Q284 66 309 124Q314 137 314 166V186H303Z\" transform=\"translate(9656,0)\"></path><path data-c=\"1D5C0\" d=\"M55 286Q55 357 105 406T224 455Q280 455 323 421L322 423L318 427Q318 428 339 434T396 448T465 455H471L478 416L485 377Q484 377 474 379T445 383T401 385Q397 385 391 385T381 384L362 383L357 387Q358 386 364 375T375 354T384 325T389 287Q389 217 340 168T221 119Q178 119 138 142Q133 145 131 143Q125 131 125 117Q125 82 155 72L227 71Q230 71 251 71T280 71T310 69T343 65T373 57T403 46T428 30T449 7Q471 -26 471 -62V-71Q471 -136 384 -178Q326 -206 250 -206Q159 -206 102 -172T30 -92Q28 -84 28 -68T31 -37T40 -12T52 7T64 21T75 31T82 38Q60 68 60 106Q60 145 80 180L86 189L80 199Q55 240 55 286ZM304 233T304 287T279 362T220 383Q189 383 165 361T140 287Q140 243 161 217T220 191Q253 191 278 212ZM250 -134Q298 -134 331 -122T375 -96T387 -69Q387 -21 306 -7Q288 -5 216 -5Q161 -5 153 -7Q146 -9 139 -13T122 -31T113 -66Q113 -75 113 -80T127 -97T166 -121Q203 -134 250 -134Z\" transform=\"translate(10137,0)\"></path><path data-c=\"1D5BA\" d=\"M236 387Q209 387 184 382T141 370T111 355T91 342T83 337L82 355Q80 373 79 393T77 417Q77 419 81 421Q86 423 91 426Q155 460 227 460H238Q319 460 368 400Q393 371 400 341T408 252Q408 240 408 207T407 152V0H317V39L306 32Q244 -10 159 -10H152Q109 -10 77 22Q38 61 38 126Q38 142 39 146Q55 199 130 223T295 252H314V277Q314 305 313 310Q308 342 287 364T236 387ZM303 186Q124 180 124 126Q124 105 144 86T208 66Q284 66 309 124Q314 137 314 166V186H303Z\" transform=\"translate(10637,0)\"></path><path data-c=\"1D5C2\" d=\"M67 576V680H171V576H67ZM74 0V444H164V0H74Z\" transform=\"translate(11118,0)\"></path><path data-c=\"1D5C7\" d=\"M160 392Q214 446 283 454Q285 454 292 454T303 455H306Q417 455 438 354Q442 331 443 164V0H350V157Q349 315 348 320Q334 378 259 378H253Q224 378 204 358Q180 334 173 301T165 209Q165 198 165 172T166 129V0H73V450H160V392Z\" transform=\"translate(11357,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(11874,0)\"></path><path data-c=\"1D5CD\" d=\"M333 27Q333 24 314 16T257 -1T184 -10H172Q146 -10 128 14T105 58T99 91Q95 113 95 251V371H18V444H98V571H182V444H316V371H182V253Q183 128 189 104Q199 68 234 68Q277 72 314 98Q315 93 323 61T333 27Z\" transform=\"translate(12257,0)\"></path><path data-c=\"A0\" d=\"\" transform=\"translate(12618,0)\"></path></g><g data-mml-node=\"mi\" transform=\"translate(12868,0)\"><path data-c=\"1D465\" d=\"M52 289Q59 331 106 386T222 442Q257 442 286 424T329 379Q371 442 430 442Q467 442 494 420T522 361Q522 332 508 314T481 292T458 288Q439 288 427 299T415 328Q415 374 465 391Q454 404 425 404Q412 404 406 402Q368 386 350 336Q290 115 290 78Q290 50 306 38T341 26Q378 26 414 59T463 140Q466 150 469 151T485 153H489Q504 153 504 145Q504 144 502 134Q486 77 440 33T333 -11Q263 -11 227 52Q186 -10 133 -10H127Q78 -10 57 16T35 71Q35 103 54 123T99 143Q142 143 142 101Q142 81 130 66T107 46T94 41L91 40Q91 39 97 36T113 29T132 26Q168 26 194 71Q203 87 217 139T245 247T261 313Q266 340 266 352Q266 380 251 392T217 404Q177 404 142 372T93 290Q91 281 88 280T72 278H58Q52 284 52 289Z\"></path></g></g></g>"},"\\textsf{Residual}=\\textsf{observed }y -\\textsf{predicted }\\hat{y}":{"x":0,"w":14935,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mtext\"><path data-c=\"1D5B1\" d=\"M88 0V694H227H259H302Q365 694 399 689T474 663Q528 637 558 595T589 504Q589 482 584 462T569 426T547 396T522 372T495 353T470 338T449 328T434 322L429 320L440 300Q452 280 477 238T523 160L617 1L565 0Q513 0 512 1Q512 2 424 156L337 309H189V0H88ZM492 504Q492 600 367 620Q354 622 271 623H189V385H271Q363 386 388 392Q432 402 462 430T492 504Z\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(646,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(1090,0)\"></path><path data-c=\"1D5C2\" d=\"M67 576V680H171V576H67ZM74 0V444H164V0H74Z\" transform=\"translate(1473,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(1712,0)\"></path><path data-c=\"1D5CE\" d=\"M353 39Q352 38 344 34T331 27T315 19T295 11T270 3T241 -3T207 -8T168 -10H162Q148 -10 137 -8T111 2T87 30T74 81Q73 89 73 268V444H166V268L167 92Q171 79 174 74T192 64T238 59Q317 59 344 116Q349 128 349 148T350 291V444H443V0H353V39Z\" transform=\"translate(2229,0)\"></path><path data-c=\"1D5BA\" d=\"M236 387Q209 387 184 382T141 370T111 355T91 342T83 337L82 355Q80 373 79 393T77 417Q77 419 81 421Q86 423 91 426Q155 460 227 460H238Q319 460 368 400Q393 371 400 341T408 252Q408 240 408 207T407 152V0H317V39L306 32Q244 -10 159 -10H152Q109 -10 77 22Q38 61 38 126Q38 142 39 146Q55 199 130 223T295 252H314V277Q314 305 313 310Q308 342 287 364T236 387ZM303 186Q124 180 124 126Q124 105 144 86T208 66Q284 66 309 124Q314 137 314 166V186H303Z\" transform=\"translate(2746,0)\"></path><path data-c=\"1D5C5\" d=\"M74 0V694H164V0H74Z\" transform=\"translate(3227,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(3743.8,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mtext\" transform=\"translate(4799.6,0)\"><path data-c=\"1D5C8\" d=\"M28 222Q28 323 95 391T244 460Q275 460 281 459Q364 445 417 377T471 219Q471 124 408 57T250 -10Q158 -10 93 57T28 222ZM377 230Q377 277 364 310T328 358T287 379T248 385Q233 385 219 382T186 369T155 342T132 297T122 230Q122 146 159 108T250 69H253Q263 69 274 70T305 81T339 106T365 154T377 230Z\"></path><path data-c=\"1D5BB\" d=\"M303 -11Q280 -11 259 -6T222 6T194 21T176 33T168 38V0H75V694H165V550L166 405Q247 455 336 455Q397 455 439 389T482 226Q482 115 428 52T303 -11ZM390 221Q390 283 361 331T265 379Q214 379 177 342L168 334V118Q203 66 258 66Q316 66 353 106T390 221Z\" transform=\"translate(500,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(1017,0)\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(1400,0)\"></path><path data-c=\"1D5CB\" d=\"M171 389Q237 455 320 455H327V373H317Q262 369 220 336T167 248Q165 239 164 119V0H74V450H159V377L171 389Z\" transform=\"translate(1844,0)\"></path><path data-c=\"1D5CF\" d=\"M178 0Q15 441 14 442Q14 444 60 444Q107 444 107 442Q108 441 136 364T196 194T232 67Q233 98 280 234T356 442Q356 444 401 444T446 442L282 0H178Z\" transform=\"translate(2186,0)\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(2647,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(3091,0)\"></path><path data-c=\"A0\" d=\"\" transform=\"translate(3608,0)\"></path></g><g data-mml-node=\"mi\" transform=\"translate(8657.6,0)\"><path data-c=\"1D466\" d=\"M21 287Q21 301 36 335T84 406T158 442Q199 442 224 419T250 355Q248 336 247 334Q247 331 231 288T198 191T182 105Q182 62 196 45T238 27Q261 27 281 38T312 61T339 94Q339 95 344 114T358 173T377 247Q415 397 419 404Q432 431 462 431Q475 431 483 424T494 412T496 403Q496 390 447 193T391 -23Q363 -106 294 -155T156 -205Q111 -205 77 -183T43 -117Q43 -95 50 -80T69 -58T89 -48T106 -45Q150 -45 150 -87Q150 -107 138 -122T115 -142T102 -147L99 -148Q101 -153 118 -160T152 -167H160Q177 -167 186 -165Q219 -156 247 -127T290 -65T313 -9T321 21L315 17Q309 13 296 6T270 -6Q250 -11 231 -11Q185 -11 150 11T104 82Q103 89 103 113Q103 170 138 262T173 379Q173 380 173 381Q173 390 173 393T169 400T158 404H154Q131 404 112 385T82 344T65 302T57 280Q55 278 41 278H27Q21 284 21 287Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(9369.8,0)\"><path data-c=\"2212\" d=\"M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z\"></path></g><g data-mml-node=\"mtext\" transform=\"translate(10370,0)\"><path data-c=\"1D5C9\" d=\"M166 404Q194 424 241 439T337 455H341Q410 455 451 370Q483 307 483 222Q483 128 433 59T306 -10Q282 -10 260 -5T222 7T194 21T176 33T168 38V-194H75V444H165V424L166 404ZM390 222Q390 287 354 331T266 376T177 340L168 332V118Q200 66 257 66Q313 66 351 112T390 222Z\"></path><path data-c=\"1D5CB\" d=\"M171 389Q237 455 320 455H327V373H317Q262 369 220 336T167 248Q165 239 164 119V0H74V450H159V377L171 389Z\" transform=\"translate(517,0)\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(859,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(1303,0)\"></path><path data-c=\"1D5C2\" d=\"M67 576V680H171V576H67ZM74 0V444H164V0H74Z\" transform=\"translate(1820,0)\"></path><path data-c=\"1D5BC\" d=\"M34 223Q34 327 99 393T245 460Q290 460 301 459Q328 455 354 445T395 427T410 415L396 338L386 344Q377 349 362 357T335 370Q305 381 258 381H252Q182 381 146 315Q126 275 126 224Q126 158 159 113T255 68Q329 68 394 106L408 114L410 93Q411 72 412 52L414 32Q407 27 394 20T338 2T252 -10Q156 -10 95 58T34 223Z\" transform=\"translate(2059,0)\"></path><path data-c=\"1D5CD\" d=\"M333 27Q333 24 314 16T257 -1T184 -10H172Q146 -10 128 14T105 58T99 91Q95 113 95 251V371H18V444H98V571H182V444H316V371H182V253Q183 128 189 104Q199 68 234 68Q277 72 314 98Q315 93 323 61T333 27Z\" transform=\"translate(2503,0)\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(2864,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(3308,0)\"></path><path data-c=\"A0\" d=\"\" transform=\"translate(3825,0)\"></path></g><g data-mml-node=\"TeXAtom\" data-mjx-texclass=\"ORD\" transform=\"translate(14445,0)\"><g data-mml-node=\"mover\"><g data-mml-node=\"mi\"><path data-c=\"1D466\" d=\"M21 287Q21 301 36 335T84 406T158 442Q199 442 224 419T250 355Q248 336 247 334Q247 331 231 288T198 191T182 105Q182 62 196 45T238 27Q261 27 281 38T312 61T339 94Q339 95 344 114T358 173T377 247Q415 397 419 404Q432 431 462 431Q475 431 483 424T494 412T496 403Q496 390 447 193T391 -23Q363 -106 294 -155T156 -205Q111 -205 77 -183T43 -117Q43 -95 50 -80T69 -58T89 -48T106 -45Q150 -45 150 -87Q150 -107 138 -122T115 -142T102 -147L99 -148Q101 -153 118 -160T152 -167H160Q177 -167 186 -165Q219 -156 247 -127T290 -65T313 -9T321 21L315 17Q309 13 296 6T270 -6Q250 -11 231 -11Q185 -11 150 11T104 82Q103 89 103 113Q103 170 138 262T173 379Q173 380 173 381Q173 390 173 393T169 400T158 404H154Q131 404 112 385T82 344T65 302T57 280Q55 278 41 278H27Q21 284 21 287Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(300.6,16) translate(-250 0)\"><path data-c=\"5E\" d=\"M112 560L249 694L257 686Q387 562 387 560L361 531Q359 532 303 581L250 627L195 580Q182 569 169 557T148 538L140 532Q138 530 125 546L112 560Z\"></path></g></g></g></g></g>"},"\\textsf{Score }(y)":{"x":0,"w":3804,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mtext\"><path data-c=\"1D5B2\" d=\"M55 514Q55 589 115 652T283 716Q315 716 345 711T396 699T432 685T457 672T467 667Q467 666 459 618T449 568Q383 634 282 634Q214 634 182 600T150 525Q150 507 155 492T172 465T194 446T222 432T247 423T272 416T289 412Q353 396 378 384Q432 358 466 307T500 194Q500 110 438 44T272 -22Q215 -22 159 -5T73 28T44 50Q45 51 49 75T57 122T62 146L65 143Q68 140 74 136T88 125T107 111T131 98T160 85T194 74T232 66T274 63H286Q327 63 366 96T406 182Q406 245 352 280Q329 296 265 310T173 339Q124 363 90 409T55 514Z\"></path><path data-c=\"1D5BC\" d=\"M34 223Q34 327 99 393T245 460Q290 460 301 459Q328 455 354 445T395 427T410 415L396 338L386 344Q377 349 362 357T335 370Q305 381 258 381H252Q182 381 146 315Q126 275 126 224Q126 158 159 113T255 68Q329 68 394 106L408 114L410 93Q411 72 412 52L414 32Q407 27 394 20T338 2T252 -10Q156 -10 95 58T34 223Z\" transform=\"translate(556,0)\"></path><path data-c=\"1D5C8\" d=\"M28 222Q28 323 95 391T244 460Q275 460 281 459Q364 445 417 377T471 219Q471 124 408 57T250 -10Q158 -10 93 57T28 222ZM377 230Q377 277 364 310T328 358T287 379T248 385Q233 385 219 382T186 369T155 342T132 297T122 230Q122 146 159 108T250 69H253Q263 69 274 70T305 81T339 106T365 154T377 230Z\" transform=\"translate(1000,0)\"></path><path data-c=\"1D5CB\" d=\"M171 389Q237 455 320 455H327V373H317Q262 369 220 336T167 248Q165 239 164 119V0H74V450H159V377L171 389Z\" transform=\"translate(1500,0)\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(1842,0)\"></path><path data-c=\"A0\" d=\"\" transform=\"translate(2286,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(2536,0)\"><path data-c=\"28\" d=\"M94 250Q94 319 104 381T127 488T164 576T202 643T244 695T277 729T302 750H315H319Q333 750 333 741Q333 738 316 720T275 667T226 581T184 443T167 250T184 58T225 -81T274 -167T316 -220T333 -241Q333 -250 318 -250H315H302L274 -226Q180 -141 137 -14T94 250Z\"></path></g><g data-mml-node=\"mi\" transform=\"translate(2925,0)\"><path data-c=\"1D466\" d=\"M21 287Q21 301 36 335T84 406T158 442Q199 442 224 419T250 355Q248 336 247 334Q247 331 231 288T198 191T182 105Q182 62 196 45T238 27Q261 27 281 38T312 61T339 94Q339 95 344 114T358 173T377 247Q415 397 419 404Q432 431 462 431Q475 431 483 424T494 412T496 403Q496 390 447 193T391 -23Q363 -106 294 -155T156 -205Q111 -205 77 -183T43 -117Q43 -95 50 -80T69 -58T89 -48T106 -45Q150 -45 150 -87Q150 -107 138 -122T115 -142T102 -147L99 -148Q101 -153 118 -160T152 -167H160Q177 -167 186 -165Q219 -156 247 -127T290 -65T313 -9T321 21L315 17Q309 13 296 6T270 -6Q250 -11 231 -11Q185 -11 150 11T104 82Q103 89 103 113Q103 170 138 262T173 379Q173 380 173 381Q173 390 173 393T169 400T158 404H154Q131 404 112 385T82 344T65 302T57 280Q55 278 41 278H27Q21 284 21 287Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(3415,0)\"><path data-c=\"29\" d=\"M60 749L64 750Q69 750 74 750H86L114 726Q208 641 251 514T294 250Q294 182 284 119T261 12T224 -76T186 -143T145 -194T113 -227T90 -246Q87 -249 86 -250H74Q66 -250 63 -250T58 -247T55 -238Q56 -237 66 -225Q221 -64 221 250T66 725Q56 737 55 738Q55 746 60 749Z\"></path></g></g></g>"},"y - \\hat{y} = 90 - 85.5 = 4.5":{"x":0,"w":10148,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mi\"><path data-c=\"1D466\" d=\"M21 287Q21 301 36 335T84 406T158 442Q199 442 224 419T250 355Q248 336 247 334Q247 331 231 288T198 191T182 105Q182 62 196 45T238 27Q261 27 281 38T312 61T339 94Q339 95 344 114T358 173T377 247Q415 397 419 404Q432 431 462 431Q475 431 483 424T494 412T496 403Q496 390 447 193T391 -23Q363 -106 294 -155T156 -205Q111 -205 77 -183T43 -117Q43 -95 50 -80T69 -58T89 -48T106 -45Q150 -45 150 -87Q150 -107 138 -122T115 -142T102 -147L99 -148Q101 -153 118 -160T152 -167H160Q177 -167 186 -165Q219 -156 247 -127T290 -65T313 -9T321 21L315 17Q309 13 296 6T270 -6Q250 -11 231 -11Q185 -11 150 11T104 82Q103 89 103 113Q103 170 138 262T173 379Q173 380 173 381Q173 390 173 393T169 400T158 404H154Q131 404 112 385T82 344T65 302T57 280Q55 278 41 278H27Q21 284 21 287Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(712.2,0)\"><path data-c=\"2212\" d=\"M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z\"></path></g><g data-mml-node=\"TeXAtom\" data-mjx-texclass=\"ORD\" transform=\"translate(1712.4,0)\"><g data-mml-node=\"mover\"><g data-mml-node=\"mi\"><path data-c=\"1D466\" d=\"M21 287Q21 301 36 335T84 406T158 442Q199 442 224 419T250 355Q248 336 247 334Q247 331 231 288T198 191T182 105Q182 62 196 45T238 27Q261 27 281 38T312 61T339 94Q339 95 344 114T358 173T377 247Q415 397 419 404Q432 431 462 431Q475 431 483 424T494 412T496 403Q496 390 447 193T391 -23Q363 -106 294 -155T156 -205Q111 -205 77 -183T43 -117Q43 -95 50 -80T69 -58T89 -48T106 -45Q150 -45 150 -87Q150 -107 138 -122T115 -142T102 -147L99 -148Q101 -153 118 -160T152 -167H160Q177 -167 186 -165Q219 -156 247 -127T290 -65T313 -9T321 21L315 17Q309 13 296 6T270 -6Q250 -11 231 -11Q185 -11 150 11T104 82Q103 89 103 113Q103 170 138 262T173 379Q173 380 173 381Q173 390 173 393T169 400T158 404H154Q131 404 112 385T82 344T65 302T57 280Q55 278 41 278H27Q21 284 21 287Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(300.6,16) translate(-250 0)\"><path data-c=\"5E\" d=\"M112 560L249 694L257 686Q387 562 387 560L361 531Q359 532 303 581L250 627L195 580Q182 569 169 557T148 538L140 532Q138 530 125 546L112 560Z\"></path></g></g></g><g data-mml-node=\"mo\" transform=\"translate(2480.2,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(3536,0)\"><path data-c=\"39\" d=\"M352 287Q304 211 232 211Q154 211 104 270T44 396Q42 412 42 436V444Q42 537 111 606Q171 666 243 666Q245 666 249 666T257 665H261Q273 665 286 663T323 651T370 619T413 560Q456 472 456 334Q456 194 396 97Q361 41 312 10T208 -22Q147 -22 108 7T68 93T121 149Q143 149 158 135T173 96Q173 78 164 65T148 49T135 44L131 43Q131 41 138 37T164 27T206 22H212Q272 22 313 86Q352 142 352 280V287ZM244 248Q292 248 321 297T351 430Q351 508 343 542Q341 552 337 562T323 588T293 615T246 625Q208 625 181 598Q160 576 154 546T147 441Q147 358 152 329T172 282Q197 248 244 248Z\"></path><path data-c=\"30\" d=\"M96 585Q152 666 249 666Q297 666 345 640T423 548Q460 465 460 320Q460 165 417 83Q397 41 362 16T301 -15T250 -22Q224 -22 198 -16T137 16T82 83Q39 165 39 320Q39 494 96 585ZM321 597Q291 629 250 629Q208 629 178 597Q153 571 145 525T137 333Q137 175 145 125T181 46Q209 16 250 16Q290 16 318 46Q347 76 354 130T362 333Q362 478 354 524T321 597Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(4758.2,0)\"><path data-c=\"2212\" d=\"M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(5758.4,0)\"><path data-c=\"38\" d=\"M70 417T70 494T124 618T248 666Q319 666 374 624T429 515Q429 485 418 459T392 417T361 389T335 371T324 363L338 354Q352 344 366 334T382 323Q457 264 457 174Q457 95 399 37T249 -22Q159 -22 101 29T43 155Q43 263 172 335L154 348Q133 361 127 368Q70 417 70 494ZM286 386L292 390Q298 394 301 396T311 403T323 413T334 425T345 438T355 454T364 471T369 491T371 513Q371 556 342 586T275 624Q268 625 242 625Q201 625 165 599T128 534Q128 511 141 492T167 463T217 431Q224 426 228 424L286 386ZM250 21Q308 21 350 55T392 137Q392 154 387 169T375 194T353 216T330 234T301 253T274 270Q260 279 244 289T218 306L210 311Q204 311 181 294T133 239T107 157Q107 98 150 60T250 21Z\"></path><path data-c=\"35\" d=\"M164 157Q164 133 148 117T109 101H102Q148 22 224 22Q294 22 326 82Q345 115 345 210Q345 313 318 349Q292 382 260 382H254Q176 382 136 314Q132 307 129 306T114 304Q97 304 95 310Q93 314 93 485V614Q93 664 98 664Q100 666 102 666Q103 666 123 658T178 642T253 634Q324 634 389 662Q397 666 402 666Q410 666 410 648V635Q328 538 205 538Q174 538 149 544L139 546V374Q158 388 169 396T205 412T256 420Q337 420 393 355T449 201Q449 109 385 44T229 -22Q148 -22 99 32T50 154Q50 178 61 192T84 210T107 214Q132 214 148 197T164 157Z\" transform=\"translate(500,0)\"></path><path data-c=\"2E\" d=\"M78 60Q78 84 95 102T138 120Q162 120 180 104T199 61Q199 36 182 18T139 0T96 17T78 60Z\" transform=\"translate(1000,0)\"></path><path data-c=\"35\" d=\"M164 157Q164 133 148 117T109 101H102Q148 22 224 22Q294 22 326 82Q345 115 345 210Q345 313 318 349Q292 382 260 382H254Q176 382 136 314Q132 307 129 306T114 304Q97 304 95 310Q93 314 93 485V614Q93 664 98 664Q100 666 102 666Q103 666 123 658T178 642T253 634Q324 634 389 662Q397 666 402 666Q410 666 410 648V635Q328 538 205 538Q174 538 149 544L139 546V374Q158 388 169 396T205 412T256 420Q337 420 393 355T449 201Q449 109 385 44T229 -22Q148 -22 99 32T50 154Q50 178 61 192T84 210T107 214Q132 214 148 197T164 157Z\" transform=\"translate(1278,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(7814.2,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(8870,0)\"><path data-c=\"34\" d=\"M462 0Q444 3 333 3Q217 3 199 0H190V46H221Q241 46 248 46T265 48T279 53T286 61Q287 63 287 115V165H28V211L179 442Q332 674 334 675Q336 677 355 677H373L379 671V211H471V165H379V114Q379 73 379 66T385 54Q393 47 442 46H471V0H462ZM293 211V545L74 212L183 211H293Z\"></path><path data-c=\"2E\" d=\"M78 60Q78 84 95 102T138 120Q162 120 180 104T199 61Q199 36 182 18T139 0T96 17T78 60Z\" transform=\"translate(500,0)\"></path><path data-c=\"35\" d=\"M164 157Q164 133 148 117T109 101H102Q148 22 224 22Q294 22 326 82Q345 115 345 210Q345 313 318 349Q292 382 260 382H254Q176 382 136 314Q132 307 129 306T114 304Q97 304 95 310Q93 314 93 485V614Q93 664 98 664Q100 666 102 666Q103 666 123 658T178 642T253 634Q324 634 389 662Q397 666 402 666Q410 666 410 648V635Q328 538 205 538Q174 538 149 544L139 546V374Q158 388 169 396T205 412T256 420Q337 420 393 355T449 201Q449 109 385 44T229 -22Q148 -22 99 32T50 154Q50 178 61 192T84 210T107 214Q132 214 148 197T164 157Z\" transform=\"translate(778,0)\"></path></g></g></g>"}});
+  var META = {"id":"5.4","title":"Residuals","sub":"Observed minus predicted","still":17.3};
+  var DUR = 20.6;
+  var scene = (function (K) {
+  const { T, L, C, R, e, lin, f, INK, GRAY, BLUE, ORANGE } = K;
+  // 5.4: a residual is y - y-hat. Positive residual: the model underpredicts; negative: it overpredicts. A residual plot with no pattern supports a linear model;
+  // curvature in a residual plot suggests it is not the most appropriate model.
+  const wrap = (w, out) => out >= 1 ? "" : `<g transform="translate(0,${(out * 320).toFixed(1)})" opacity="${(1 - out).toFixed(3)}">${w}</g>`;
+  const xs = [1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 8, 8, 9, 10], ys = [55, 58, 63, 61, 70, 66, 74, 72, 81, 79, 84, 90, 88, 95];
+  const n = xs.length, mx = xs.reduce((s, v) => s + v, 0) / n, my = ys.reduce((s, v) => s + v, 0) / n;
+  let sxy = 0, sxx = 0; xs.forEach((x, i) => { sxy += (x - mx) * (ys[i] - my); sxx += (x - mx) ** 2; });
+  const b = sxy / sxx, a = my - b * mx, yh = x => a + b * x, res = xs.map((x, i) => ys[i] - yh(x));
+  const X = lin(0, 11, 90, 540), Y = lin(40, 100, 390, 160);
+  // curved data for the second residual plot, and its residuals from a fitted line
+  const cx2 = xs.map(x => x), cy2 = cx2.map(x => 30 + 14 * Math.sqrt(x) * 2.1 + 0 * x);
+  const m2 = cy2.reduce((s, v) => s + v, 0) / n; let q = 0, q2 = 0; cx2.forEach((x, i) => { q += (x - mx) * (cy2[i] - m2); q2 += (x - mx) ** 2; }); const b2 = q / q2, a2 = m2 - b2 * mx, res2 = cx2.map((x, i) => cy2[i] - (a2 + b2 * x));
+  const plot = (data, cxn, a0, title, col) => {
+    const lim = Math.max(...data.map(Math.abs)) * 1.3, Xp = lin(0, 11, cxn - 130, cxn + 130), Yp = lin(-lim, lim, 400, 190);
+    let z = L(cxn - 140, Yp(0), cxn + 140, Yp(0), { stroke: INK, sw: 2.5, dash: "7 6", op: a0 }) + L(cxn - 140, 400, cxn - 140, 180, { sw: 3, op: a0 }) + L(cxn - 140, 400, cxn + 140, 400, { sw: 3, op: a0 });
+    xs.forEach((x, i) => { z += C(Xp(x), Yp(data[i]), 6 * Math.min(1, a0 * 1.2), { fill: col, stroke: INK, sw: 2, op: a0 }); });
+    z += T(cxn, 172, title, { size: 21, w: 800, op: a0 });
+    return z;
+  };
+  return { frame(t) {
+    const a0 = e(t, .2, .8);
+    let w = L(90, 390, 540, 390, { sw: 3, op: a0 }) + L(90, 390, 90, 150, { sw: 3, op: a0 });
+    [0, 2, 4, 6, 8, 10].forEach(v => { w += L(X(v), 390, X(v), 398, { sw: 2.5, op: a0 }) + T(X(v), 420, v, { size: 20, w: 700, fill: GRAY, op: a0 }); });
+    w += T(315, 450, "Hours studied (x)", { size: 20, w: 700, fill: GRAY, op: a0 }) + T(90, 142, "Score (y)", { size: 20, w: 700, fill: GRAY, anchor: "start", op: a0 });
+    w += L(X(.4), Y(yh(.4)), X(10.6), Y(yh(10.6)), { stroke: ORANGE, sw: 5, op: e(t, .6, 1.4) });
+    xs.forEach((x, i) => { w += C(X(x), Y(ys[i]), 7, { fill: BLUE, stroke: INK, sw: 2, op: e(t, .4 + i * .04, .9 + i * .04) }); });
+    // one residual
+    const k = 11, r1 = e(t, 2.6, 3.6);
+    w += L(X(xs[k]), Y(yh(xs[k])), X(xs[k]), Y(yh(xs[k])) + (Y(ys[k]) - Y(yh(xs[k]))) * r1, { stroke: INK, sw: 5, op: 1 });
+    w += T(300, 486, "Residual = observed y − predicted ŷ", { size: 22, w: 800, op: e(t, 2.2, 2.9) * (1 - e(t, 6.0, 6.5)) });
+    w += T(300, 522, "y − ŷ = " + ys[k] + " − " + f(yh(xs[k]), 1) + " = " + f(res[k], 1), { size: 24, w: 800, fill: ORANGE, op: e(t, 3.8, 4.5) * (1 - e(t, 6.0, 6.5)) });
+    // all residuals, then the sign
+    const r2 = e(t, 6.4, 7.6);
+    xs.forEach((x, i) => { if (i !== k) w += L(X(x), Y(yh(x)), X(x), Y(yh(x)) + (Y(ys[i]) - Y(yh(x))) * r2, { stroke: res[i] > 0 ? BLUE : ORANGE, sw: 4, op: 1 }); });
+    w += T(300, 486, "Point above the line: positive residual", { size: 21, w: 800, fill: BLUE, op: e(t, 7.8, 8.4) });
+    w += T(300, 522, "the model underpredicts", { size: 21, w: 700, op: e(t, 8.4, 9.0) });
+    w += T(300, 558, "Point below the line: negative residual, the model overpredicts", { size: 20, w: 700, fill: ORANGE, op: e(t, 9.6, 10.3) });
+    let s = wrap(w, e(t, 11.6, 12.3));
+    // residual plots
+    if (t > 12.0) {
+      s += T(300, 128, "Residual plots: residual against x", { size: 22, w: 700, fill: GRAY, op: e(t, 12.4, 13.0) });
+      s += plot(res, 160, e(t, 12.8, 13.6), "No pattern", BLUE) + plot(res2, 440, e(t, 14.0, 14.8), "Curved pattern", ORANGE);
+      s += T(160, 462, "Random scatter", { size: 22, w: 800, op: e(t, 15.2, 15.8) }) + T(160, 494, "a linear model fits", { size: 21, w: 700, fill: GRAY, op: e(t, 15.2, 15.8) });
+      s += T(440, 462, "Curvature", { size: 22, w: 800, op: e(t, 16.2, 16.8) }) + T(440, 494, "a linear model is not", { size: 21, w: 700, fill: GRAY, op: e(t, 16.2, 16.8) }) + T(440, 522, "the best model", { size: 21, w: 700, fill: GRAY, op: e(t, 16.2, 16.8) });
+    }
+    return s;
+  } };
+})(K);
+  var qs = location.search;
+  if (/transparent/.test(qs)) document.documentElement.classList.add("transparent");
+  var svg = document.getElementById("s");
+  K.TH.onchange = function (p) { try { document.documentElement.style.setProperty("--surface", p.surface); } catch (e) { } };
+  K.TH.onchange(K.TH.pal); K.TH.watch();
+  function draw(t) {
+    K.TH.poll();
+    var a = K.clamp(t / 0.2) * (1 - K.clamp((t - (DUR - 0.4)) / 0.4));
+    svg.innerHTML = K.resolve('<g opacity="' + a.toFixed(3) + '">' +
+      K.T(300, 56, META.title, { size: 30, w: 700 }) + K.T(300, 88, META.sub, { size: 20, w: 500, fill: K.GRAY }) +
+      scene.frame(t) +
+      K.T(588, 592, "AP Stats " + META.id, { size: 14, w: 500, fill: "@muted", anchor: "end" }) + '</g>');
+  }
+  var tm = qs.match(/[?&]t=([0-9.]+)/);
+  if (tm) { draw(parseFloat(tm[1])); return; }
+  if (/still/.test(qs) || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { draw(META.still); return; }
+  // Playback state: clock = time on the animation timeline. speed can be changed at any moment.
+  var clock = 0, last = null, playing = true, speed = 1;
+  var sm = qs.match(/[?&]speed=([0-9.]+)/); if (sm) speed = parseFloat(sm[1]) || 1;
+  function frame(now) {
+    if (last !== null && playing) clock = (clock + (now - last) / 1000 * speed) % DUR;
+    last = now; draw(clock); requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // Hooks for a future control bar (or a parent page): window.anim.setSpeed(0.5), .pause(), .play(), .seek(3.2)
+  window.anim = {
+    time: function () { return clock; }, chapters: [{"id":"residual","t":2.2,"rest":5.6},{"id":"sign","t":6.4,"rest":10.8},{"id":"plots","t":12.4,"rest":17}],
+    setSpeed: function (v) { speed = v; }, getSpeed: function () { return speed; },
+    play: function () { playing = true; }, pause: function () { playing = false; },
+    seek: function (v) { clock = ((v % DUR) + DUR) % DUR; }, duration: DUR
+  };
+  document.getElementById("card").addEventListener("click", function () { playing = !playing; });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1.13 Experimental design</title>
+<style>
+  html, body { margin: 0; background: var(--surface, #fff); }
+  /* add ?transparent to the URL (or iframe src) for a see-through background */
+  html.transparent, html.transparent body { background: transparent; }
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  #card { width: min(100vw, 100vh, 640px); aspect-ratio: 1 / 1; cursor: pointer; }
+  svg { width: 100%; height: 100%; display: block; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div id="card" title="Click to pause or play"><svg id="s" viewBox="0 0 600 600" role="img" aria-label="The four parts of a well-designed experiment, then three designs with twelve subjects: a completely randomized design, a randomized block design and a matched pairs design, and the cause-and-effect conclusion that random assignment allows"></svg></div>
+<script>
+// Shared drawing + math kit. Embedded into every animation page via makeKit.toString().
+function makeKit(TEX, REC) {
+  /* animTheme(srcEl): semantic colors that follow the page theme. One source of truth, used in two places:
+     - pasted inside makeKit() of every animation page (srcEl = window.frameElement, the <iframe> in the CED block), and
+     - in the CED block's own script (srcEl = the .ced-anim element), so inline step images use the same colors.
+  
+     Page contract: the page defines six CSS custom properties on the iframe's ancestor (the .ced-anim block) -
+       --anim-ink      text, outlines, curves
+       --anim-surface  background the picture sits on
+       --anim-a        first series / population            (site orange)
+       --anim-b        second series / statistic            (site blue)
+       --anim-pos      "good" outcome (reject, capture)
+       --anim-neg      "bad" outcome  (fail to reject, miss)
+     Any CSS color syntax works. Missing or unreadable values fall back to DEF, which is the standalone look.
+  
+     Everything else is derived, so a new theme needs only those six values:
+       muted, line, dot, pale   mixes of ink and surface
+       a, b, pos, neg           the token, darkened toward ink only if needed to reach 3:1 on the surface (graphics)
+       at, bt, pt, nt           the same, darkened until 4.5:1 on the surface (text)  [WCAG AA]
+     Scenes use placeholders such as "@ink" and "@a"; resolve() swaps them for the current rgb() values. */
+  function animTheme(srcEl) {
+    var DEF = { ink: "#1f2a44", surface: "#ffffff", a: "#e8590c", b: "#1c7ed6", pos: "#2f9e44", neg: "#d6336c" };
+    var NAMES = ["ink", "surface", "a", "b", "pos", "neg"], TEXT = { "@a": "@at", "@b": "@bt", "@pos": "@pt", "@neg": "@nt" };
+    var self = { pal: {}, rgbs: {}, key: "", n: 19, dirty: false, onchange: null };
+    function parse(c) {
+      c = String(c).trim();
+      var m = c.match(/^#([0-9a-f]{3})$/i);
+      if (m) return m[1].split("").map(function (h) { return parseInt(h + h, 16); });
+      m = c.match(/^#([0-9a-f]{6})/i);
+      if (m) return [0, 2, 4].map(function (i) { return parseInt(m[1].substr(i, 2), 16); });
+      m = c.match(/[\d.]+/g);
+      return m && m.length >= 3 ? m.slice(0, 3).map(function (v) { return Math.round(+v); }) : null;
+    }
+    function chan(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    function lum(p) { return 0.2126 * chan(p[0]) + 0.7152 * chan(p[1]) + 0.0722 * chan(p[2]); }
+    function ratio(p, q) { var a = lum(p), b = lum(q); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
+    function mix(p, q, t) { return p.map(function (v, i) { return Math.round(v + (q[i] - v) * t); }); }
+    function css(p) { return "rgb(" + p.join(",") + ")"; }
+    // the lightest change toward the ink that reaches the wanted contrast on the surface
+    function fix(fg, bg, ink, want) { for (var i = 0; i <= 20; i++) { var c = mix(fg, ink, i / 20); if (ratio(c, bg) >= want) return c; } return ink; }
+    function toRgb(v) {   // any CSS color -> [r,g,b], via the browser's own parser
+      if (!v) return null;
+      var p = parse(v); if (/^#|^rgb\(/i.test(String(v).trim()) && p) return p;
+      try {
+        var el = document.createElement("span"); el.style.color = v; if (!el.style.color) return null;
+        document.body.appendChild(el); var c = getComputedStyle(el).color; document.body.removeChild(el); return parse(c);
+      } catch (e) { return null; }
+    }
+    function build(t) {
+      var ink = t.ink, s = t.surface, P = {}, R = {};
+      R.ink = ink; R.surface = s;
+      R.muted = fix(mix(ink, s, 0.30), s, ink, 4.5); R.line = mix(ink, s, 0.78); R.dot = mix(ink, s, 0.66); R.pale = mix(ink, s, 0.88);
+      [["a", "at"], ["b", "bt"], ["pos", "pt"], ["neg", "nt"]].forEach(function (x) { R[x[0]] = fix(t[x[0]], s, ink, 3); R[x[1]] = fix(t[x[0]], s, ink, 4.5); });
+      Object.keys(R).forEach(function (n) { P[n] = css(R[n]); });
+      self.pal = P; self.rgbs = R;
+    }
+    self.defaults = DEF; self.parse = parse; self.ratio = ratio;
+    self.rgb = function (name) { name = String(name); return self.rgbs[name.charAt(0) === "@" ? name.slice(1) : name] || parse(name) || [0, 0, 0]; };   // "@b" or "b" or any css color
+    self.text = function (c) { return TEXT[c] || c; };   // text on the surface uses the 4.5:1 variant of an accent
+    self.resolve = function (s) { return s.replace(/@(ink|surface|muted|line|dot|pale|a|b|pos|neg|at|bt|pt|nt)\b/g, function (m, n) { return self.pal[n]; }); };
+    // read the six tokens from srcEl; true when something changed
+    self.read = function () {
+      var cs = null;
+      try { if (srcEl) cs = srcEl.ownerDocument.defaultView.getComputedStyle(srcEl); } catch (e) { cs = null; }
+      var t = {};
+      NAMES.forEach(function (n) { var v = cs && cs.getPropertyValue("--anim-" + n); t[n] = toRgb(v && v.trim()) || parse(DEF[n]); });
+      var key = NAMES.map(function (n) { return t[n].join(","); }).join("|");
+      if (key === self.key) return false;
+      self.key = key; build(t); if (self.onchange) self.onchange(self.pal); return true;
+    };
+    // call once per drawn frame: reads at first use, on a change signal, and every 20th frame (covers a swapped stylesheet)
+    self.poll = function () { if (!self.key || self.dirty || ++self.n % 20 === 0) { self.dirty = false; return self.read(); } return false; };
+    // change signals: class/style/data-theme edits on the page, and the page's light/dark setting
+    self.watch = function () {
+      try {
+        var d = srcEl.ownerDocument, w = d.defaultView, flag = function () { self.dirty = true; };
+        if (w.MutationObserver) { var mo = new w.MutationObserver(flag), o = { attributes: true, attributeFilter: ["class", "style", "data-theme"], subtree: false }; mo.observe(d.documentElement, o); if (d.body) mo.observe(d.body, o); var host = srcEl.closest && srcEl.closest(".ced-anim"); if (host) mo.observe(host, o); }
+        if (w.matchMedia) { var mq = w.matchMedia("(prefers-color-scheme: dark)"); if (mq.addEventListener) mq.addEventListener("change", flag); else if (mq.addListener) mq.addListener(flag); }
+      } catch (e) { /* standalone page or cross-origin parent: the periodic poll and defaults still work */ }
+    };
+    self.read();
+    return self;
+  }
+  const TH = animTheme((() => { try { return typeof window !== "undefined" ? window.frameElement : null; } catch (e) { return null; } })());
+  const INK = "@ink", GRAY = "@muted", BLUE = "@b", ORANGE = "@a", PALE = "@pale", GREEN = "@pos", PINK = "@neg", LINE = "@line", DOT = "@dot";
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  const pr = (t, a, b) => clamp((t - a) / (b - a));
+  const e = (t, a, b) => ease(pr(t, a, b));
+  const win = (t, a, b, f = .3) => clamp((t - a) / f) * (1 - clamp((t - (b - f)) / f));
+  const mixc = (a, b, t) => {
+    const pa = TH.rgb(a), pb = TH.rgb(b);
+    return "rgb(" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",") + ")";
+  };
+  const n1 = v => (Math.round(v * 10) / 10).toFixed(1);
+  const f = (v, d = 2) => v.toFixed(d);
+  const op = o => (o && o.op != null && o.op < 1) ? ` opacity="${Math.max(0, o.op).toFixed(3)}"` : "";
+  // ---- TeX labels -------------------------------------------------------------------------------------------
+  // TEX = glyph data rendered by MathJax at build time (see tex.js); REC = build-time recorder; MISS = formulas not found.
+  const MISS = [];
+  const SUB = "₀₁₂₃₄₅₆₇₈₉ₐₙᵢ", SUBV = "0123456789ani";
+  const GREEK = { "μ": "\\mu", "σ": "\\sigma", "ρ": "\\rho", "β": "\\beta", "α": "\\alpha", "χ": "\\chi", "Σ": "\\sum", "π": "\\pi", "λ": "\\lambda", "θ": "\\theta" };
+  const OPS = { "−": "-", "÷": "\\div", "·": "\\cdot", "×": "\\times", "≠": "\\ne", "≈": "\\approx", "≥": "\\ge", "≤": "\\le", "±": "\\pm", "→": "\\to", "∞": "\\infty" };
+  const MATHCH = /[\u0302\u0304μσρβαχΣπλθ²³√≥≤≠≈±×÷ŷȳ₀-₉ₐₙᵢ]/;
+  const hasMath = s => !/<[a-z]/i.test(s) && (MATHCH.test(s) || /(^|[\s(])[A-Za-z]\s*[=<>]\s*[-−\d(]/.test(s) || /^[A-Za-z]\s*=\s/.test(s) || /(^|\s)P\(/.test(s) || /(^|[\s(])[pnxyzrkXYt]($|[\s,.;:)])/.test(s) || /(^|\s)[A-Za-z]\*/.test(s) || /(^|\s)\d[\d.]*[A-Za-z]($|[\s,.;:)])/.test(s));
+  const isOp = t => /^(=|<|>|\+|−|×|÷|\/|≈|≥|≤|≠|±|·|\*)$/.test(t);
+  const isNum = t => /^[-−+]?[\d][\d.,%/]*$/.test(t);
+  const mathTok = t => MATHCH.test(t) || /^[A-Za-z]$/.test(t) && !/^[aAI]$/.test(t) || /^[A-Za-z]\(/.test(t) || /^[A-Za-z]\*$/.test(t) || /^\d[\d.]*[A-Za-z]$/.test(t) || /^[A-Za-z]\d$/.test(t) || isOp(t);
+  const toTex = m => {   // unicode math text -> TeX math
+    let u = m;
+    for (let i = u.indexOf("√"); i >= 0; i = u.indexOf("√", i + 1)) {   // sqrt with a bracket group or a plain atom
+      let j = i + 1, inner;
+      if (u[j] === "(") { let d = 0, k = j; for (; k < u.length; k++) { if (u[k] === "(") d++; if (u[k] === ")" && --d === 0) break; } inner = u.slice(j + 1, k); u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(k + 1); }
+      else { const mm = u.slice(j).match(/^[A-Za-z0-9.μσ\u0302\u0304₀-₉ₐₙᵢ²]+/); inner = mm ? mm[0] : ""; u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(j + inner.length); }
+    }
+    u = u.replace(/p̂c/g, "\\hat{p}_{c}").replace(/([A-Za-z])\u0302/g, "\\hat{$1}").replace(/([A-Za-z])\u0304/g, "\\bar{$1}").replace(/ŷ/g, "\\hat{y}").replace(/ȳ/g, "\\bar{y}");
+    u = u.replace(new RegExp("[" + SUB + "]+", "g"), r => "_{" + r.split("").map(c => SUBV[SUB.indexOf(c)]).join("") + "}");
+    u = u.replace(/²/g, "^{2}").replace(/³/g, "^{3}").replace(/([A-Za-z])\*/g, "$1^{*}").replace(/(\d),(\d)/g, "$1{,}$2").replace(/%/g, "\\%");
+    u = u.replace(/[μσρβαχΣπλθ]/g, c => GREEK[c] + " ").replace(/[−÷·×≠≈≥≤±→∞]/g, c => OPS[c] + " ");
+    u = u.replace(/:( ?)/g, (m, sp) => "{:}" + (sp ? "\\ " : "")).replace(/([,;]) /g, "$1\\ ");
+    return u.replace(/ +/g, " ").trim();
+  };
+  const toText = p => "\\textsf{" + p.replace(/[\\{}]/g, "").replace(/([%&#_$])/g, "\\$1") + "}";
+  const u2tex = src => {
+    const str = String(src).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    const toks = str.split(/ +/).map(t => { const m = t.match(/^([("“]*)(.*?)([,.;:!?)"”]*)$/); return { lead: m[1], core: m[2], trail: m[3], raw: t }; });
+    toks.forEach(k => { k.type = !k.core ? "n" : mathTok(k.core) ? "m" : isNum(k.core) ? "n" : "p"; });
+    toks.forEach((k, i) => { if (k.type === "n") { const a = toks[i - 1], b = toks[i + 1]; k.type = (a && a.type === "m") || (b && b.type === "m") ? "m" : "p"; } });
+    // a bracket opened by a math token keeps the tokens up to its closing bracket together as maths (e.g. "(x̄ − μ₀)")
+    const runs = [];
+    toks.forEach(k => { const last = runs[runs.length - 1]; if (last && last.type === k.type) last.t.push(k.raw); else runs.push({ type: k.type, t: [k.raw] }); });
+    let out = "";
+    runs.forEach((r, i) => {
+      const body = r.t.join(" ");
+      if (r.type === "m") {
+        const first = r.t[0].replace(/^[("“]+/, ""), prev = runs[i - 1], next = runs[i + 1];
+        const relFirst = isOp(first), relLast = isOp(r.t[r.t.length - 1]);
+        out += toTex(body.replace(/[“”]/g, '"'));
+        if (next && !relLast) out += "\\ ";
+        if (next && relLast) out += "";
+      } else {
+        const prev = runs[i - 1], nextr = runs[i + 1];
+        const pm = prev && prev.type === "m", relBefore = pm && isOp(prev.t[prev.t.length - 1]);
+        out += toText(body + (nextr && !(nextr.type === "m" && isOp(nextr.t[0].replace(/^[("“]+/, ""))) ? " " : ""));
+      }
+    });
+    return out;
+  };
+  const M = (x, y, tex, o = {}) => {
+    if (REC) { REC[tex] = 1; return ""; }
+    const g = TEX && TEX[tex]; if (!g) { if (MISS.length < 50) MISS.push(tex); return ""; }
+    const s = (o.size || 22) / 1000, a = o.anchor || "middle";
+    const dx = a === "start" ? g.x : a === "end" ? g.x + g.w : g.x + g.w / 2;
+    const body = (c, b, sw) => `<g color="${c}">${sw != null ? g.b.replace('stroke-width="0"', 'stroke-width="' + sw + '"') : g.b}</g>`;
+    return `<g transform="translate(${(x - dx * s).toFixed(1)},${(+y).toFixed(1)}) scale(${s})"${op(o)}>${o.halo ? body("@surface", 0, (7 / s).toFixed(0)) : ""}${body(TH.text(o.fill || INK), 0, o.bold || null)}</g>`;
+  };
+  const Mw = (tex, size = 22) => (TEX && TEX[tex]) ? TEX[tex].w * size / 1000 : 0;
+  const boldOf = w => w >= 800 ? 44 : w >= 700 ? 34 : w >= 600 ? 24 : w >= 500 ? 14 : 0;
+  const TXT = (x, y, s, o = {}) => `<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" font-size="${o.size || 24}" font-weight="${o.w || 600}" fill="${TH.text(o.fill || INK)}" text-anchor="${o.anchor || "middle"}"${o.mono ? ' class="mono"' : ""}${o.halo ? ' stroke="@surface" stroke-width="7" paint-order="stroke" stroke-linejoin="round"' : ""}${op(o)}>${s}</text>`;
+  // Tn: like T for a label whose numbers change every frame. Wrap the changing part in braces: Tn(x, y, "n = {" + n + "} per group").
+  // Fixed parts are typeset as a whole; the braced part is drawn digit by digit from shared glyphs (so a page stays small).
+  const Tn = (x, y, s, o = {}) => {
+    const size = (o.size || 24) * 1.08, gapU = size * 0.28;
+    const raw = String(s).split(/(\$[^$]*\$)/), parts = [];   // $...$ is raw TeX; {...} marks the part that changes
+    raw.forEach(r => { if (r[0] === "$" && r.length > 1) parts.push(r); else r.split(/(\{[^}]*\})/).forEach(q => parts.push(q)); });
+    const pcs = parts.filter(p => p !== "").map(p => {
+      if (p[0] === "{" && p[p.length - 1] === "}") return { d: p.slice(1, -1).replace(/−/g, "-").split("") };
+      const lead = Math.min(4, (p.match(/^ */)[0]).length), trail = Math.min(4, (p.match(/ *$/)[0]).length), core = p.trim();
+      return core ? { tex: core[0] === "$" ? core.slice(1, -1) : u2tex(core), lead, trail } : { tex: "", lead: 0, trail: 0, skip: true };
+    }).filter(p => !p.skip);
+    if (REC) { pcs.forEach(p => { if (p.tex) REC[p.tex] = 1; else p.d.forEach(c => { REC[c] = 1; }); }); return ""; }
+    const ok = pcs.every(p => p.tex ? TEX[p.tex] : p.d.every(c => TEX[c]));
+    if (!ok) { if (MISS.length < 50) MISS.push(String(s)); return TXT(x, y, String(s).replace(/[{}]/g, ""), o); }
+    const items = []; let w = 0;
+    pcs.forEach((p, i) => {
+      if (p.tex) { if (i > 0 && p.lead) w += gapU * p.lead; items.push({ k: p.tex, x: w }); w += TEX[p.tex].w * size / 1000; if (i < pcs.length - 1 && p.trail) w += gapU * p.trail; }
+      else p.d.forEach(c => { items.push({ k: c, x: w }); w += TEX[c].w * size / 1000; });
+    });
+    const a = o.anchor || "middle", x0 = a === "start" ? x : a === "end" ? x - w : x - w / 2;
+    return items.map(it => M(x0 + it.x, y, it.k, { size, anchor: "start", fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null })).join("");
+  };
+  // T draws text. A string containing maths notation (x̄, μ, ², √, "n = 25", ...) is typeset with the build-time TeX glyphs; if a formula is missing it falls back to plain text.
+  const T = (x, y, s, o = {}) => {
+    const str = String(s);
+    if (/\$[^$]+\$/.test(str)) return Tn(x, y, str, o);
+    if ((REC || TEX) && hasMath(str)) {
+      const tex = u2tex(str);
+      if (REC) { REC[tex] = 1; return ""; }
+      if (TEX[tex]) return M(x, y, tex, { size: (o.size || 24) * 1.08, anchor: o.anchor, fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null, halo: o.halo });
+      if (MISS.length < 50) MISS.push(tex);
+    }
+    return TXT(x, y, str, o);
+  };
+  const R = (x, y, w, h, o = {}) => `<rect x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" width="${Math.max(0, w).toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="${o.rx || 0}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2.5}"${op(o)}/>`;
+  const L = (x1, y1, x2, y2, o = {}) => `<line x1="${(+x1).toFixed(1)}" y1="${(+y1).toFixed(1)}" x2="${(+x2).toFixed(1)}" y2="${(+y2).toFixed(1)}" stroke="${o.stroke || INK}" stroke-width="${o.sw || 2.5}" stroke-linecap="round"${o.dash ? ` stroke-dasharray="${o.dash}"` : ""}${op(o)}/>`;
+  const C = (cx, cy, r, o = {}) => `<circle cx="${(+cx).toFixed(1)}" cy="${(+cy).toFixed(1)}" r="${Math.max(0, r).toFixed(1)}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2}"${op(o)}/>`;
+  const P = (d, o = {}) => `<path d="${d}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 3}" stroke-linejoin="round" stroke-linecap="round"${op(o)}/>`;
+  const G = (inner, o = {}) => `<g transform="translate(${(o.tx || 0).toFixed(1)},${(o.ty || 0).toFixed(1)})${o.s ? ` scale(${o.s})` : ""}"${op(o)}>${inner}</g>`;
+  const A = (x1, y1, x2, y2, o = {}) => {
+    const a = Math.atan2(y2 - y1, x2 - x1), h = o.head || 12, c = o.stroke || INK;
+    return L(x1, y1, x2 - Math.cos(a) * h * .6, y2 - Math.sin(a) * h * .6, o) +
+      `<polygon points="${x2.toFixed(1)},${y2.toFixed(1)} ${(x2 - h * Math.cos(a - .45)).toFixed(1)},${(y2 - h * Math.sin(a - .45)).toFixed(1)} ${(x2 - h * Math.cos(a + .45)).toFixed(1)},${(y2 - h * Math.sin(a + .45)).toFixed(1)}" fill="${c}"${op(o)}/>`;
+  };
+  const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) * (r1 - r0) / (d1 - d0);
+  const xaxis = (X, y, vals, o = {}) => {
+    let s = L(X(vals[0]) - (o.pad || 0), y, X(vals[vals.length - 1]) + (o.pad || 0), y, { sw: 3 });
+    vals.forEach(v => { s += L(X(v), y, X(v), y + 7, { sw: 2.5 }) + T(X(v), y + (o.dy || 28), o.fmt ? o.fmt(v) : v, { size: o.size || 18, fill: o.fill || INK }); });
+    return s;
+  };
+  const curve = (fn, a, b, X, Y, n = 120) => { let d = ""; for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += (i ? "L" : "M") + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d; };
+  const area = (fn, a, b, X, Y, y0, n = 90) => { let d = "M" + X(a).toFixed(1) + " " + y0.toFixed(1); for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += "L" + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d + "L" + X(b).toFixed(1) + " " + y0.toFixed(1) + "Z"; };
+
+  // ---- math ----
+  const erf = x => { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + .3275911 * x); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x); return s * y; };
+  const nPDF = (x, m = 0, s = 1) => Math.exp(-.5 * ((x - m) / s) ** 2) / (s * Math.sqrt(2 * Math.PI));
+  const nCDF = (x, m = 0, s = 1) => .5 * (1 + erf((x - m) / (s * Math.SQRT2)));
+  const lgamma = z => { const g = 7, c = [.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7]; if (z < .5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z); z -= 1; let x = c[0]; for (let i = 1; i < g + 2; i++) x += c[i] / (z + i); const t = z + g + .5; return .5 * Math.log(2 * Math.PI) + (z + .5) * Math.log(t) - t + Math.log(x); };
+  const tPDF = (x, df) => Math.exp(lgamma((df + 1) / 2) - lgamma(df / 2)) / Math.sqrt(df * Math.PI) * Math.pow(1 + x * x / df, -(df + 1) / 2);
+  const tUpper = (x, df) => { // P(T > x) by Simpson integration
+    const b = 300, n = 3000, h = (b - x) / n; let s = tPDF(x, df) + tPDF(b, df);
+    for (let i = 1; i < n; i++) s += tPDF(x + i * h, df) * (i % 2 ? 4 : 2); return s * h / 3;
+  };
+  const tCDF = (x, df) => x >= 0 ? 1 - tUpper(x, df) : tUpper(-x, df);
+  const gammaP = (a, x) => { // regularized lower incomplete gamma
+    if (x <= 0) return 0; const gln = lgamma(a);
+    if (x < a + 1) { let ap = a, sum = 1 / a, del = sum; for (let n = 0; n < 200; n++) { ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-12) break; } return sum * Math.exp(-x + a * Math.log(x) - gln); }
+    let b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+    for (let i = 1; i < 200; i++) { const an = -i * (i - a); b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-12) break; }
+    return 1 - Math.exp(-x + a * Math.log(x) - gln) * h;
+  };
+  const chiPDF = (x, k) => x <= 0 ? 0 : Math.exp((k / 2 - 1) * Math.log(x) - x / 2 - (k / 2) * Math.log(2) - lgamma(k / 2));
+  const chiCDF = (x, k) => gammaP(k / 2, x / 2);
+  const choose = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+  const binom = (n, k, p) => choose(n, k) * Math.pow(p, k) * Math.pow(1 - p, n - k);
+  const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const randn = r => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+  const shuffle = (a, r) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); };
+  const med = a => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  const five = a => { const s = a.slice().sort((x, y) => x - y), n = s.length, h = Math.floor(n / 2); return [s[0], med(s.slice(0, h)), med(s), med(s.slice(n - h)), s[n - 1]]; };
+  const corr = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0, syy = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; syy += (y[i] - my) ** 2; }); return sxy / Math.sqrt(sxx * syy); };
+  const lsrl = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; }); const b = sxy / sxx; return { a: my - b * mx, b }; };
+  const fmtp = p => p < .001 ? "< 0.001" : p.toFixed(3);
+  return { INK, GRAY, BLUE, ORANGE, PALE, GREEN, PINK, LINE, DOT, TH, resolve: s => (typeof window !== "undefined" && window.__keepTokens) ? s : TH.resolve(s), clamp, ease, pr, e, win, mixc, n1, f, T, R, L, C, P, G, A, lin, xaxis, curve, area, M, Mw, Tn, MISS, u2tex, hasMath,
+    erf, nPDF, nCDF, lgamma, tPDF, tCDF, tUpper, chiPDF, chiCDF, choose, binom, rng, randn, shuffle, mean, sd, med, five, corr, lsrl, fmtp };
+}
+
+(function () {
+  var K = makeKit({});
+  var META = {"id":"1.13","title":"Experimental design","sub":"Parts of an experiment and three designs","still":33.6};
+  var DUR = 36.9;
+  var scene = (function (K) {
+  const { T, C, R, L, e, rng, INK, GRAY, BLUE, ORANGE, GREEN, PINK } = K;
+  // 1.13: the components of a well-designed experiment, then three designs with 12 subjects of two kinds (an extraneous variable):
+  // completely randomized (assign at random), randomized block (block first, then randomize within blocks), matched pairs (two treatments, one per pair).
+  const wrap = (w, out) => out >= 1 ? "" : `<g transform="translate(0,${(out * 320).toFixed(1)})" opacity="${(1 - out).toFixed(3)}">${w}</g>`;
+  const r = rng(2), kind = [0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 1];   // 0 = type 1 (blue), 1 = type 2 (orange)
+  const shuf = a => { const b = a.slice(); for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
+  // box slots: treatment A box and treatment B box, 3 columns by 2 rows each
+  const slot = (g, k) => [g === 0 ? 100 + (k % 3) * 58 : 360 + (k % 3) * 58, 300 + Math.floor(k / 3) * 56];
+  const sub = (x, y, col, a) => C(x, y, 17, { fill: col ? ORANGE : BLUE, stroke: INK, sw: 2, op: a });
+  // each design: start positions, group of each subject (0 = A, 1 = B)
+  const mix = Array.from({ length: 12 }, (_, i) => [75 + i * 41, 170]);
+  const crG = shuf([0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1]);
+  // block: subjects ordered by kind; within each kind half to A, half to B
+  const ord = [...kind.keys()].sort((a, b) => kind[a] - kind[b] || a - b), blockStart = []; ord.forEach((s, j) => { blockStart[s] = [75 + j * 41, 170]; });
+  const blkG = []; [0, 1].forEach(kd => { const ids = ord.filter(s => kind[s] === kd), g = shuf(ids.map((_, i) => i % 2)); ids.forEach((s, i) => { blkG[s] = g[i]; }); });
+  // pairs: adjacent subjects in the order list form a pair
+  const pairG = []; for (let p = 0; p < 6; p++) { const g = r() < .5 ? [0, 1] : [1, 0]; pairG[ord[2 * p]] = g[0]; pairG[ord[2 * p + 1]] = g[1]; }
+  const place = (start, G, tt0) => { const cnt = [0, 0]; return kind.map((kd, s) => { const g = G[s], k = cnt[g]++; return { from: start[s], to: slot(g, k), kd, tt: tt0 + s * .22 }; }); };
+  const design = (t, b, start, G, title, line1, line2, extra) => {
+    const ee = (x, y) => e(t, b + x, b + y);
+    let z = T(300, 128, title, { size: 24, w: 800, op: ee(.2, .8) });
+    [["Treatment A", 80, 24], ["Treatment B", 340, 24]].forEach(([h, x], i) => {
+      z += R(x - 6, 262, 190, 128, { rx: 12, fill: "@surface", stroke: INK, sw: 2.5, op: ee(.4, 1.0) }) + T(x + 89, 252, h, { size: 21, w: 800, op: ee(.4, 1.0) });
+    });
+    if (extra) z += extra(ee);
+    place(start, G, b + 2.4).forEach(({ from, to, kd, tt }) => { const m = e(t, tt, tt + 1.0); z += sub(from[0] + (to[0] - from[0]) * m, from[1] + (to[1] - from[1]) * m, kd, ee(.3, .9)); });
+    z += T(300, 440, line1, { size: 21, w: 800, op: ee(4.6, 5.2) }) + T(300, 472, line2, { size: 21, w: 700, fill: GRAY, op: ee(5.2, 5.8) });
+    return z;
+  };
+  const comps = [["Comparison", "at least two treatment groups, one may be a control"], ["Random assignment", "of treatments to the experimental units"], ["Replication", "more than one unit assigned to each treatment"], ["Direct control", "keep extraneous sources of variation the same"]];
+  return { frame(t) {
+    // slide 1: components
+    let w = T(300, 128, "A well-designed experiment has four parts", { size: 22, w: 800, op: e(t, .3, .9) });
+    comps.forEach(([h, d], i) => {
+      const a = e(t, .8 + i * .9, 1.5 + i * .9), y = 196 + i * 82;
+      w += R(44, y - 32, 512, 66, { rx: 12, fill: "@surface", stroke: BLUE, sw: 3, op: a }) + T(64, y - 4, h, { size: 22, w: 800, fill: BLUE, anchor: "start", op: a }) + T(64, y + 24, d, { size: 20, w: 600, anchor: "start", op: a });
+    });
+    let s = wrap(w, e(t, 5.4, 6.1));
+    if (t > 5.8 && t < 14.2) s += wrap(design(t, 6.4, mix, crG, "Completely randomized design", "Assign treatments to units completely at random", "Random assignment tends to balance the kinds of units", null), e(t, 13.4, 14.1));
+    if (t > 13.8 && t < 22.0) s += wrap(design(t, 14.4, blockStart, blkG, "Randomized block design", "Group like units into blocks, then randomize in each block", "The blocking variable's variation is separated out", ee => R(70, 150, 6 * 41 + 8, 40, { rx: 8, fill: "none", stroke: BLUE, sw: 3, op: ee(.4, 1.0) }) + R(75 + 6 * 41 - 20 + 6, 150, 6 * 41 - 6, 40, { rx: 8, fill: "none", stroke: ORANGE, sw: 3, op: ee(.4, 1.0) })), e(t, 21.2, 21.9));
+    if (t > 21.6 && t < 29.6) s += wrap(design(t, 22.2, blockStart, pairG, "Matched pairs design", "Pair similar units; each pair gets both treatments", "A randomized block design with only two treatments", ee => [0, 1, 2, 3, 4, 5].map(p => R(75 + 2 * p * 41 - 22, 148, 41 + 44, 44, { rx: 14, fill: "none", stroke: GREEN, sw: 3, op: ee(.4, 1.0) })).join("")), e(t, 29.0, 29.7));
+    if (t > 29.4) {
+      s += T(300, 150, "Random assignment of treatments", { size: 24, w: 800, op: e(t, 29.8, 30.4) });
+      s += T(300, 190, "allows a cause-and-effect conclusion", { size: 24, w: 800, fill: ORANGE, op: e(t, 29.8, 30.4) });
+      [["Completely randomized", "assign all units at random"], ["Randomized block", "randomize within blocks"], ["Matched pairs", "randomize within each pair"]].forEach(([h, d], i) => {
+        const a = e(t, 30.8 + i * .8, 31.5 + i * .8), y = 270 + i * 82;
+        s += R(44, y - 30, 512, 64, { rx: 12, fill: "@surface", stroke: INK, sw: 3, op: a }) + T(64, y - 2, h, { size: 22, w: 800, anchor: "start", op: a }) + T(64, y + 24, d, { size: 20, w: 600, fill: GRAY, anchor: "start", op: a });
+      });
+    }
+    return s;
+  } };
+})(K);
+  var qs = location.search;
+  if (/transparent/.test(qs)) document.documentElement.classList.add("transparent");
+  var svg = document.getElementById("s");
+  K.TH.onchange = function (p) { try { document.documentElement.style.setProperty("--surface", p.surface); } catch (e) { } };
+  K.TH.onchange(K.TH.pal); K.TH.watch();
+  function draw(t) {
+    K.TH.poll();
+    var a = K.clamp(t / 0.2) * (1 - K.clamp((t - (DUR - 0.4)) / 0.4));
+    svg.innerHTML = K.resolve('<g opacity="' + a.toFixed(3) + '">' +
+      K.T(300, 56, META.title, { size: 30, w: 700 }) + K.T(300, 88, META.sub, { size: 20, w: 500, fill: K.GRAY }) +
+      scene.frame(t) +
+      K.T(588, 592, "AP Stats " + META.id, { size: 14, w: 500, fill: "@muted", anchor: "end" }) + '</g>');
+  }
+  var tm = qs.match(/[?&]t=([0-9.]+)/);
+  if (tm) { draw(parseFloat(tm[1])); return; }
+  if (/still/.test(qs) || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { draw(META.still); return; }
+  // Playback state: clock = time on the animation timeline. speed can be changed at any moment.
+  var clock = 0, last = null, playing = true, speed = 1;
+  var sm = qs.match(/[?&]speed=([0-9.]+)/); if (sm) speed = parseFloat(sm[1]) || 1;
+  function frame(now) {
+    if (last !== null && playing) clock = (clock + (now - last) / 1000 * speed) % DUR;
+    last = now; draw(clock); requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // Hooks for a future control bar (or a parent page): window.anim.setSpeed(0.5), .pause(), .play(), .seek(3.2)
+  window.anim = {
+    time: function () { return clock; }, chapters: [{"id":"parts","t":0.3,"rest":4.8},{"id":"randomized","t":6.4,"rest":12.4},{"id":"block","t":14.4,"rest":20.4},{"id":"pairs","t":22.2,"rest":28.2},{"id":"conclusion","t":29.8,"rest":33.4}],
+    setSpeed: function (v) { speed = v; }, getSpeed: function () { return speed; },
+    play: function () { playing = true; }, pause: function () { playing = false; },
+    seek: function (v) { clock = ((v % DUR) + DUR) % DUR; }, duration: DUR
+  };
+  document.getElementById("card").addEventListener("click", function () { playing = !playing; });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1.9 Comparing distributions and z-scores</title>
+<style>
+  html, body { margin: 0; background: var(--surface, #fff); }
+  /* add ?transparent to the URL (or iframe src) for a see-through background */
+  html.transparent, html.transparent body { background: transparent; }
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  #card { width: min(100vw, 100vh, 640px); aspect-ratio: 1 / 1; cursor: pointer; }
+  svg { width: 100%; height: 100%; display: block; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div id="card" title="Click to pause or play"><svg id="s" viewBox="0 0 600 600" role="img" aria-label="Two boxplots of test scores on one axis compared by center, spread and an outlier in context, then z-scores that compare 82 on test A with 30 on test B"></svg></div>
+<script>
+// Shared drawing + math kit. Embedded into every animation page via makeKit.toString().
+function makeKit(TEX, REC) {
+  /* animTheme(srcEl): semantic colors that follow the page theme. One source of truth, used in two places:
+     - pasted inside makeKit() of every animation page (srcEl = window.frameElement, the <iframe> in the CED block), and
+     - in the CED block's own script (srcEl = the .ced-anim element), so inline step images use the same colors.
+  
+     Page contract: the page defines six CSS custom properties on the iframe's ancestor (the .ced-anim block) -
+       --anim-ink      text, outlines, curves
+       --anim-surface  background the picture sits on
+       --anim-a        first series / population            (site orange)
+       --anim-b        second series / statistic            (site blue)
+       --anim-pos      "good" outcome (reject, capture)
+       --anim-neg      "bad" outcome  (fail to reject, miss)
+     Any CSS color syntax works. Missing or unreadable values fall back to DEF, which is the standalone look.
+  
+     Everything else is derived, so a new theme needs only those six values:
+       muted, line, dot, pale   mixes of ink and surface
+       a, b, pos, neg           the token, darkened toward ink only if needed to reach 3:1 on the surface (graphics)
+       at, bt, pt, nt           the same, darkened until 4.5:1 on the surface (text)  [WCAG AA]
+     Scenes use placeholders such as "@ink" and "@a"; resolve() swaps them for the current rgb() values. */
+  function animTheme(srcEl) {
+    var DEF = { ink: "#1f2a44", surface: "#ffffff", a: "#e8590c", b: "#1c7ed6", pos: "#2f9e44", neg: "#d6336c" };
+    var NAMES = ["ink", "surface", "a", "b", "pos", "neg"], TEXT = { "@a": "@at", "@b": "@bt", "@pos": "@pt", "@neg": "@nt" };
+    var self = { pal: {}, rgbs: {}, key: "", n: 19, dirty: false, onchange: null };
+    function parse(c) {
+      c = String(c).trim();
+      var m = c.match(/^#([0-9a-f]{3})$/i);
+      if (m) return m[1].split("").map(function (h) { return parseInt(h + h, 16); });
+      m = c.match(/^#([0-9a-f]{6})/i);
+      if (m) return [0, 2, 4].map(function (i) { return parseInt(m[1].substr(i, 2), 16); });
+      m = c.match(/[\d.]+/g);
+      return m && m.length >= 3 ? m.slice(0, 3).map(function (v) { return Math.round(+v); }) : null;
+    }
+    function chan(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    function lum(p) { return 0.2126 * chan(p[0]) + 0.7152 * chan(p[1]) + 0.0722 * chan(p[2]); }
+    function ratio(p, q) { var a = lum(p), b = lum(q); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
+    function mix(p, q, t) { return p.map(function (v, i) { return Math.round(v + (q[i] - v) * t); }); }
+    function css(p) { return "rgb(" + p.join(",") + ")"; }
+    // the lightest change toward the ink that reaches the wanted contrast on the surface
+    function fix(fg, bg, ink, want) { for (var i = 0; i <= 20; i++) { var c = mix(fg, ink, i / 20); if (ratio(c, bg) >= want) return c; } return ink; }
+    function toRgb(v) {   // any CSS color -> [r,g,b], via the browser's own parser
+      if (!v) return null;
+      var p = parse(v); if (/^#|^rgb\(/i.test(String(v).trim()) && p) return p;
+      try {
+        var el = document.createElement("span"); el.style.color = v; if (!el.style.color) return null;
+        document.body.appendChild(el); var c = getComputedStyle(el).color; document.body.removeChild(el); return parse(c);
+      } catch (e) { return null; }
+    }
+    function build(t) {
+      var ink = t.ink, s = t.surface, P = {}, R = {};
+      R.ink = ink; R.surface = s;
+      R.muted = fix(mix(ink, s, 0.30), s, ink, 4.5); R.line = mix(ink, s, 0.78); R.dot = mix(ink, s, 0.66); R.pale = mix(ink, s, 0.88);
+      [["a", "at"], ["b", "bt"], ["pos", "pt"], ["neg", "nt"]].forEach(function (x) { R[x[0]] = fix(t[x[0]], s, ink, 3); R[x[1]] = fix(t[x[0]], s, ink, 4.5); });
+      Object.keys(R).forEach(function (n) { P[n] = css(R[n]); });
+      self.pal = P; self.rgbs = R;
+    }
+    self.defaults = DEF; self.parse = parse; self.ratio = ratio;
+    self.rgb = function (name) { name = String(name); return self.rgbs[name.charAt(0) === "@" ? name.slice(1) : name] || parse(name) || [0, 0, 0]; };   // "@b" or "b" or any css color
+    self.text = function (c) { return TEXT[c] || c; };   // text on the surface uses the 4.5:1 variant of an accent
+    self.resolve = function (s) { return s.replace(/@(ink|surface|muted|line|dot|pale|a|b|pos|neg|at|bt|pt|nt)\b/g, function (m, n) { return self.pal[n]; }); };
+    // read the six tokens from srcEl; true when something changed
+    self.read = function () {
+      var cs = null;
+      try { if (srcEl) cs = srcEl.ownerDocument.defaultView.getComputedStyle(srcEl); } catch (e) { cs = null; }
+      var t = {};
+      NAMES.forEach(function (n) { var v = cs && cs.getPropertyValue("--anim-" + n); t[n] = toRgb(v && v.trim()) || parse(DEF[n]); });
+      var key = NAMES.map(function (n) { return t[n].join(","); }).join("|");
+      if (key === self.key) return false;
+      self.key = key; build(t); if (self.onchange) self.onchange(self.pal); return true;
+    };
+    // call once per drawn frame: reads at first use, on a change signal, and every 20th frame (covers a swapped stylesheet)
+    self.poll = function () { if (!self.key || self.dirty || ++self.n % 20 === 0) { self.dirty = false; return self.read(); } return false; };
+    // change signals: class/style/data-theme edits on the page, and the page's light/dark setting
+    self.watch = function () {
+      try {
+        var d = srcEl.ownerDocument, w = d.defaultView, flag = function () { self.dirty = true; };
+        if (w.MutationObserver) { var mo = new w.MutationObserver(flag), o = { attributes: true, attributeFilter: ["class", "style", "data-theme"], subtree: false }; mo.observe(d.documentElement, o); if (d.body) mo.observe(d.body, o); var host = srcEl.closest && srcEl.closest(".ced-anim"); if (host) mo.observe(host, o); }
+        if (w.matchMedia) { var mq = w.matchMedia("(prefers-color-scheme: dark)"); if (mq.addEventListener) mq.addEventListener("change", flag); else if (mq.addListener) mq.addListener(flag); }
+      } catch (e) { /* standalone page or cross-origin parent: the periodic poll and defaults still work */ }
+    };
+    self.read();
+    return self;
+  }
+  const TH = animTheme((() => { try { return typeof window !== "undefined" ? window.frameElement : null; } catch (e) { return null; } })());
+  const INK = "@ink", GRAY = "@muted", BLUE = "@b", ORANGE = "@a", PALE = "@pale", GREEN = "@pos", PINK = "@neg", LINE = "@line", DOT = "@dot";
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  const pr = (t, a, b) => clamp((t - a) / (b - a));
+  const e = (t, a, b) => ease(pr(t, a, b));
+  const win = (t, a, b, f = .3) => clamp((t - a) / f) * (1 - clamp((t - (b - f)) / f));
+  const mixc = (a, b, t) => {
+    const pa = TH.rgb(a), pb = TH.rgb(b);
+    return "rgb(" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",") + ")";
+  };
+  const n1 = v => (Math.round(v * 10) / 10).toFixed(1);
+  const f = (v, d = 2) => v.toFixed(d);
+  const op = o => (o && o.op != null && o.op < 1) ? ` opacity="${Math.max(0, o.op).toFixed(3)}"` : "";
+  // ---- TeX labels -------------------------------------------------------------------------------------------
+  // TEX = glyph data rendered by MathJax at build time (see tex.js); REC = build-time recorder; MISS = formulas not found.
+  const MISS = [];
+  const SUB = "₀₁₂₃₄₅₆₇₈₉ₐₙᵢ", SUBV = "0123456789ani";
+  const GREEK = { "μ": "\\mu", "σ": "\\sigma", "ρ": "\\rho", "β": "\\beta", "α": "\\alpha", "χ": "\\chi", "Σ": "\\sum", "π": "\\pi", "λ": "\\lambda", "θ": "\\theta" };
+  const OPS = { "−": "-", "÷": "\\div", "·": "\\cdot", "×": "\\times", "≠": "\\ne", "≈": "\\approx", "≥": "\\ge", "≤": "\\le", "±": "\\pm", "→": "\\to", "∞": "\\infty" };
+  const MATHCH = /[\u0302\u0304μσρβαχΣπλθ²³√≥≤≠≈±×÷ŷȳ₀-₉ₐₙᵢ]/;
+  const hasMath = s => !/<[a-z]/i.test(s) && (MATHCH.test(s) || /(^|[\s(])[A-Za-z]\s*[=<>]\s*[-−\d(]/.test(s) || /^[A-Za-z]\s*=\s/.test(s) || /(^|\s)P\(/.test(s) || /(^|[\s(])[pnxyzrkXYt]($|[\s,.;:)])/.test(s) || /(^|\s)[A-Za-z]\*/.test(s) || /(^|\s)\d[\d.]*[A-Za-z]($|[\s,.;:)])/.test(s));
+  const isOp = t => /^(=|<|>|\+|−|×|÷|\/|≈|≥|≤|≠|±|·|\*)$/.test(t);
+  const isNum = t => /^[-−+]?[\d][\d.,%/]*$/.test(t);
+  const mathTok = t => MATHCH.test(t) || /^[A-Za-z]$/.test(t) && !/^[aAI]$/.test(t) || /^[A-Za-z]\(/.test(t) || /^[A-Za-z]\*$/.test(t) || /^\d[\d.]*[A-Za-z]$/.test(t) || /^[A-Za-z]\d$/.test(t) || isOp(t);
+  const toTex = m => {   // unicode math text -> TeX math
+    let u = m;
+    for (let i = u.indexOf("√"); i >= 0; i = u.indexOf("√", i + 1)) {   // sqrt with a bracket group or a plain atom
+      let j = i + 1, inner;
+      if (u[j] === "(") { let d = 0, k = j; for (; k < u.length; k++) { if (u[k] === "(") d++; if (u[k] === ")" && --d === 0) break; } inner = u.slice(j + 1, k); u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(k + 1); }
+      else { const mm = u.slice(j).match(/^[A-Za-z0-9.μσ\u0302\u0304₀-₉ₐₙᵢ²]+/); inner = mm ? mm[0] : ""; u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(j + inner.length); }
+    }
+    u = u.replace(/p̂c/g, "\\hat{p}_{c}").replace(/([A-Za-z])\u0302/g, "\\hat{$1}").replace(/([A-Za-z])\u0304/g, "\\bar{$1}").replace(/ŷ/g, "\\hat{y}").replace(/ȳ/g, "\\bar{y}");
+    u = u.replace(new RegExp("[" + SUB + "]+", "g"), r => "_{" + r.split("").map(c => SUBV[SUB.indexOf(c)]).join("") + "}");
+    u = u.replace(/²/g, "^{2}").replace(/³/g, "^{3}").replace(/([A-Za-z])\*/g, "$1^{*}").replace(/(\d),(\d)/g, "$1{,}$2").replace(/%/g, "\\%");
+    u = u.replace(/[μσρβαχΣπλθ]/g, c => GREEK[c] + " ").replace(/[−÷·×≠≈≥≤±→∞]/g, c => OPS[c] + " ");
+    u = u.replace(/:( ?)/g, (m, sp) => "{:}" + (sp ? "\\ " : "")).replace(/([,;]) /g, "$1\\ ");
+    return u.replace(/ +/g, " ").trim();
+  };
+  const toText = p => "\\textsf{" + p.replace(/[\\{}]/g, "").replace(/([%&#_$])/g, "\\$1") + "}";
+  const u2tex = src => {
+    const str = String(src).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    const toks = str.split(/ +/).map(t => { const m = t.match(/^([("“]*)(.*?)([,.;:!?)"”]*)$/); return { lead: m[1], core: m[2], trail: m[3], raw: t }; });
+    toks.forEach(k => { k.type = !k.core ? "n" : mathTok(k.core) ? "m" : isNum(k.core) ? "n" : "p"; });
+    toks.forEach((k, i) => { if (k.type === "n") { const a = toks[i - 1], b = toks[i + 1]; k.type = (a && a.type === "m") || (b && b.type === "m") ? "m" : "p"; } });
+    // a bracket opened by a math token keeps the tokens up to its closing bracket together as maths (e.g. "(x̄ − μ₀)")
+    const runs = [];
+    toks.forEach(k => { const last = runs[runs.length - 1]; if (last && last.type === k.type) last.t.push(k.raw); else runs.push({ type: k.type, t: [k.raw] }); });
+    let out = "";
+    runs.forEach((r, i) => {
+      const body = r.t.join(" ");
+      if (r.type === "m") {
+        const first = r.t[0].replace(/^[("“]+/, ""), prev = runs[i - 1], next = runs[i + 1];
+        const relFirst = isOp(first), relLast = isOp(r.t[r.t.length - 1]);
+        out += toTex(body.replace(/[“”]/g, '"'));
+        if (next && !relLast) out += "\\ ";
+        if (next && relLast) out += "";
+      } else {
+        const prev = runs[i - 1], nextr = runs[i + 1];
+        const pm = prev && prev.type === "m", relBefore = pm && isOp(prev.t[prev.t.length - 1]);
+        out += toText(body + (nextr && !(nextr.type === "m" && isOp(nextr.t[0].replace(/^[("“]+/, ""))) ? " " : ""));
+      }
+    });
+    return out;
+  };
+  const M = (x, y, tex, o = {}) => {
+    if (REC) { REC[tex] = 1; return ""; }
+    const g = TEX && TEX[tex]; if (!g) { if (MISS.length < 50) MISS.push(tex); return ""; }
+    const s = (o.size || 22) / 1000, a = o.anchor || "middle";
+    const dx = a === "start" ? g.x : a === "end" ? g.x + g.w : g.x + g.w / 2;
+    const body = (c, b, sw) => `<g color="${c}">${sw != null ? g.b.replace('stroke-width="0"', 'stroke-width="' + sw + '"') : g.b}</g>`;
+    return `<g transform="translate(${(x - dx * s).toFixed(1)},${(+y).toFixed(1)}) scale(${s})"${op(o)}>${o.halo ? body("@surface", 0, (7 / s).toFixed(0)) : ""}${body(TH.text(o.fill || INK), 0, o.bold || null)}</g>`;
+  };
+  const Mw = (tex, size = 22) => (TEX && TEX[tex]) ? TEX[tex].w * size / 1000 : 0;
+  const boldOf = w => w >= 800 ? 44 : w >= 700 ? 34 : w >= 600 ? 24 : w >= 500 ? 14 : 0;
+  const TXT = (x, y, s, o = {}) => `<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" font-size="${o.size || 24}" font-weight="${o.w || 600}" fill="${TH.text(o.fill || INK)}" text-anchor="${o.anchor || "middle"}"${o.mono ? ' class="mono"' : ""}${o.halo ? ' stroke="@surface" stroke-width="7" paint-order="stroke" stroke-linejoin="round"' : ""}${op(o)}>${s}</text>`;
+  // Tn: like T for a label whose numbers change every frame. Wrap the changing part in braces: Tn(x, y, "n = {" + n + "} per group").
+  // Fixed parts are typeset as a whole; the braced part is drawn digit by digit from shared glyphs (so a page stays small).
+  const Tn = (x, y, s, o = {}) => {
+    const size = (o.size || 24) * 1.08, gapU = size * 0.28;
+    const raw = String(s).split(/(\$[^$]*\$)/), parts = [];   // $...$ is raw TeX; {...} marks the part that changes
+    raw.forEach(r => { if (r[0] === "$" && r.length > 1) parts.push(r); else r.split(/(\{[^}]*\})/).forEach(q => parts.push(q)); });
+    const pcs = parts.filter(p => p !== "").map(p => {
+      if (p[0] === "{" && p[p.length - 1] === "}") return { d: p.slice(1, -1).replace(/−/g, "-").split("") };
+      const lead = Math.min(4, (p.match(/^ */)[0]).length), trail = Math.min(4, (p.match(/ *$/)[0]).length), core = p.trim();
+      return core ? { tex: core[0] === "$" ? core.slice(1, -1) : u2tex(core), lead, trail } : { tex: "", lead: 0, trail: 0, skip: true };
+    }).filter(p => !p.skip);
+    if (REC) { pcs.forEach(p => { if (p.tex) REC[p.tex] = 1; else p.d.forEach(c => { REC[c] = 1; }); }); return ""; }
+    const ok = pcs.every(p => p.tex ? TEX[p.tex] : p.d.every(c => TEX[c]));
+    if (!ok) { if (MISS.length < 50) MISS.push(String(s)); return TXT(x, y, String(s).replace(/[{}]/g, ""), o); }
+    const items = []; let w = 0;
+    pcs.forEach((p, i) => {
+      if (p.tex) { if (i > 0 && p.lead) w += gapU * p.lead; items.push({ k: p.tex, x: w }); w += TEX[p.tex].w * size / 1000; if (i < pcs.length - 1 && p.trail) w += gapU * p.trail; }
+      else p.d.forEach(c => { items.push({ k: c, x: w }); w += TEX[c].w * size / 1000; });
+    });
+    const a = o.anchor || "middle", x0 = a === "start" ? x : a === "end" ? x - w : x - w / 2;
+    return items.map(it => M(x0 + it.x, y, it.k, { size, anchor: "start", fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null })).join("");
+  };
+  // T draws text. A string containing maths notation (x̄, μ, ², √, "n = 25", ...) is typeset with the build-time TeX glyphs; if a formula is missing it falls back to plain text.
+  const T = (x, y, s, o = {}) => {
+    const str = String(s);
+    if (/\$[^$]+\$/.test(str)) return Tn(x, y, str, o);
+    if ((REC || TEX) && hasMath(str)) {
+      const tex = u2tex(str);
+      if (REC) { REC[tex] = 1; return ""; }
+      if (TEX[tex]) return M(x, y, tex, { size: (o.size || 24) * 1.08, anchor: o.anchor, fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null, halo: o.halo });
+      if (MISS.length < 50) MISS.push(tex);
+    }
+    return TXT(x, y, str, o);
+  };
+  const R = (x, y, w, h, o = {}) => `<rect x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" width="${Math.max(0, w).toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="${o.rx || 0}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2.5}"${op(o)}/>`;
+  const L = (x1, y1, x2, y2, o = {}) => `<line x1="${(+x1).toFixed(1)}" y1="${(+y1).toFixed(1)}" x2="${(+x2).toFixed(1)}" y2="${(+y2).toFixed(1)}" stroke="${o.stroke || INK}" stroke-width="${o.sw || 2.5}" stroke-linecap="round"${o.dash ? ` stroke-dasharray="${o.dash}"` : ""}${op(o)}/>`;
+  const C = (cx, cy, r, o = {}) => `<circle cx="${(+cx).toFixed(1)}" cy="${(+cy).toFixed(1)}" r="${Math.max(0, r).toFixed(1)}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2}"${op(o)}/>`;
+  const P = (d, o = {}) => `<path d="${d}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 3}" stroke-linejoin="round" stroke-linecap="round"${op(o)}/>`;
+  const G = (inner, o = {}) => `<g transform="translate(${(o.tx || 0).toFixed(1)},${(o.ty || 0).toFixed(1)})${o.s ? ` scale(${o.s})` : ""}"${op(o)}>${inner}</g>`;
+  const A = (x1, y1, x2, y2, o = {}) => {
+    const a = Math.atan2(y2 - y1, x2 - x1), h = o.head || 12, c = o.stroke || INK;
+    return L(x1, y1, x2 - Math.cos(a) * h * .6, y2 - Math.sin(a) * h * .6, o) +
+      `<polygon points="${x2.toFixed(1)},${y2.toFixed(1)} ${(x2 - h * Math.cos(a - .45)).toFixed(1)},${(y2 - h * Math.sin(a - .45)).toFixed(1)} ${(x2 - h * Math.cos(a + .45)).toFixed(1)},${(y2 - h * Math.sin(a + .45)).toFixed(1)}" fill="${c}"${op(o)}/>`;
+  };
+  const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) * (r1 - r0) / (d1 - d0);
+  const xaxis = (X, y, vals, o = {}) => {
+    let s = L(X(vals[0]) - (o.pad || 0), y, X(vals[vals.length - 1]) + (o.pad || 0), y, { sw: 3 });
+    vals.forEach(v => { s += L(X(v), y, X(v), y + 7, { sw: 2.5 }) + T(X(v), y + (o.dy || 28), o.fmt ? o.fmt(v) : v, { size: o.size || 18, fill: o.fill || INK }); });
+    return s;
+  };
+  const curve = (fn, a, b, X, Y, n = 120) => { let d = ""; for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += (i ? "L" : "M") + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d; };
+  const area = (fn, a, b, X, Y, y0, n = 90) => { let d = "M" + X(a).toFixed(1) + " " + y0.toFixed(1); for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += "L" + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d + "L" + X(b).toFixed(1) + " " + y0.toFixed(1) + "Z"; };
+
+  // ---- math ----
+  const erf = x => { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + .3275911 * x); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x); return s * y; };
+  const nPDF = (x, m = 0, s = 1) => Math.exp(-.5 * ((x - m) / s) ** 2) / (s * Math.sqrt(2 * Math.PI));
+  const nCDF = (x, m = 0, s = 1) => .5 * (1 + erf((x - m) / (s * Math.SQRT2)));
+  const lgamma = z => { const g = 7, c = [.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7]; if (z < .5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z); z -= 1; let x = c[0]; for (let i = 1; i < g + 2; i++) x += c[i] / (z + i); const t = z + g + .5; return .5 * Math.log(2 * Math.PI) + (z + .5) * Math.log(t) - t + Math.log(x); };
+  const tPDF = (x, df) => Math.exp(lgamma((df + 1) / 2) - lgamma(df / 2)) / Math.sqrt(df * Math.PI) * Math.pow(1 + x * x / df, -(df + 1) / 2);
+  const tUpper = (x, df) => { // P(T > x) by Simpson integration
+    const b = 300, n = 3000, h = (b - x) / n; let s = tPDF(x, df) + tPDF(b, df);
+    for (let i = 1; i < n; i++) s += tPDF(x + i * h, df) * (i % 2 ? 4 : 2); return s * h / 3;
+  };
+  const tCDF = (x, df) => x >= 0 ? 1 - tUpper(x, df) : tUpper(-x, df);
+  const gammaP = (a, x) => { // regularized lower incomplete gamma
+    if (x <= 0) return 0; const gln = lgamma(a);
+    if (x < a + 1) { let ap = a, sum = 1 / a, del = sum; for (let n = 0; n < 200; n++) { ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-12) break; } return sum * Math.exp(-x + a * Math.log(x) - gln); }
+    let b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+    for (let i = 1; i < 200; i++) { const an = -i * (i - a); b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-12) break; }
+    return 1 - Math.exp(-x + a * Math.log(x) - gln) * h;
+  };
+  const chiPDF = (x, k) => x <= 0 ? 0 : Math.exp((k / 2 - 1) * Math.log(x) - x / 2 - (k / 2) * Math.log(2) - lgamma(k / 2));
+  const chiCDF = (x, k) => gammaP(k / 2, x / 2);
+  const choose = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+  const binom = (n, k, p) => choose(n, k) * Math.pow(p, k) * Math.pow(1 - p, n - k);
+  const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const randn = r => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+  const shuffle = (a, r) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); };
+  const med = a => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  const five = a => { const s = a.slice().sort((x, y) => x - y), n = s.length, h = Math.floor(n / 2); return [s[0], med(s.slice(0, h)), med(s), med(s.slice(n - h)), s[n - 1]]; };
+  const corr = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0, syy = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; syy += (y[i] - my) ** 2; }); return sxy / Math.sqrt(sxx * syy); };
+  const lsrl = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; }); const b = sxy / sxx; return { a: my - b * mx, b }; };
+  const fmtp = p => p < .001 ? "< 0.001" : p.toFixed(3);
+  return { INK, GRAY, BLUE, ORANGE, PALE, GREEN, PINK, LINE, DOT, TH, resolve: s => (typeof window !== "undefined" && window.__keepTokens) ? s : TH.resolve(s), clamp, ease, pr, e, win, mixc, n1, f, T, R, L, C, P, G, A, lin, xaxis, curve, area, M, Mw, Tn, MISS, u2tex, hasMath,
+    erf, nPDF, nCDF, lgamma, tPDF, tCDF, tUpper, chiPDF, chiCDF, choose, binom, rng, randn, shuffle, mean, sd, med, five, corr, lsrl, fmtp };
+}
+
+(function () {
+  var K = makeKit({"\\textsf{Test A: }x = 82,\\ \\mu = 70,\\ \\sigma = 6":{"x":0,"w":12950,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mtext\"><path data-c=\"1D5B3\" d=\"M36 608V688H644V608H518L392 609V0H288V609L162 608H36Z\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(681,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(1125,0)\"></path><path data-c=\"1D5CD\" d=\"M333 27Q333 24 314 16T257 -1T184 -10H172Q146 -10 128 14T105 58T99 91Q95 113 95 251V371H18V444H98V571H182V444H316V371H182V253Q183 128 189 104Q199 68 234 68Q277 72 314 98Q315 93 323 61T333 27Z\" transform=\"translate(1508,0)\"></path><path data-c=\"20\" d=\"\" transform=\"translate(1869,0)\"></path><path data-c=\"1D5A0\" d=\"M183 181Q183 179 152 91T118 0H28L154 346L280 693Q281 694 333 694H385L511 349Q636 4 638 2Q638 0 584 0H530L464 183H184L183 181ZM324 606Q319 578 292 492T238 332T210 256Q210 254 324 254T438 255L429 281L419 308Q409 336 395 378T365 465T339 551T324 611V606Z\" transform=\"translate(2119,0)\"></path><path data-c=\"3A\" d=\"M90 346V444H188V346H90ZM90 0V98H188V0H90Z\" transform=\"translate(2786,0)\"></path><path data-c=\"A0\" d=\"\" transform=\"translate(3064,0)\"></path></g><g data-mml-node=\"mi\" transform=\"translate(3314,0)\"><path data-c=\"1D465\" d=\"M52 289Q59 331 106 386T222 442Q257 442 286 424T329 379Q371 442 430 442Q467 442 494 420T522 361Q522 332 508 314T481 292T458 288Q439 288 427 299T415 328Q415 374 465 391Q454 404 425 404Q412 404 406 402Q368 386 350 336Q290 115 290 78Q290 50 306 38T341 26Q378 26 414 59T463 140Q466 150 469 151T485 153H489Q504 153 504 145Q504 144 502 134Q486 77 440 33T333 -11Q263 -11 227 52Q186 -10 133 -10H127Q78 -10 57 16T35 71Q35 103 54 123T99 143Q142 143 142 101Q142 81 130 66T107 46T94 41L91 40Q91 39 97 36T113 29T132 26Q168 26 194 71Q203 87 217 139T245 247T261 313Q266 340 266 352Q266 380 251 392T217 404Q177 404 142 372T93 290Q91 281 88 280T72 278H58Q52 284 52 289Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(4163.8,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(5219.6,0)\"><path data-c=\"38\" d=\"M70 417T70 494T124 618T248 666Q319 666 374 624T429 515Q429 485 418 459T392 417T361 389T335 371T324 363L338 354Q352 344 366 334T382 323Q457 264 457 174Q457 95 399 37T249 -22Q159 -22 101 29T43 155Q43 263 172 335L154 348Q133 361 127 368Q70 417 70 494ZM286 386L292 390Q298 394 301 396T311 403T323 413T334 425T345 438T355 454T364 471T369 491T371 513Q371 556 342 586T275 624Q268 625 242 625Q201 625 165 599T128 534Q128 511 141 492T167 463T217 431Q224 426 228 424L286 386ZM250 21Q308 21 350 55T392 137Q392 154 387 169T375 194T353 216T330 234T301 253T274 270Q260 279 244 289T218 306L210 311Q204 311 181 294T133 239T107 157Q107 98 150 60T250 21Z\"></path><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(6219.6,0)\"><path data-c=\"2C\" d=\"M78 35T78 60T94 103T137 121Q165 121 187 96T210 8Q210 -27 201 -60T180 -117T154 -158T130 -185T117 -194Q113 -194 104 -185T95 -172Q95 -168 106 -156T131 -126T157 -76T173 -3V9L172 8Q170 7 167 6T161 3T152 1T140 0Q113 0 96 17Z\"></path></g><g data-mml-node=\"mtext\" transform=\"translate(6664.2,0)\"><path data-c=\"A0\" d=\"\"></path></g><g data-mml-node=\"mi\" transform=\"translate(6914.2,0)\"><path data-c=\"1D707\" d=\"M58 -216Q44 -216 34 -208T23 -186Q23 -176 96 116T173 414Q186 442 219 442Q231 441 239 435T249 423T251 413Q251 401 220 279T187 142Q185 131 185 107V99Q185 26 252 26Q261 26 270 27T287 31T302 38T315 45T327 55T338 65T348 77T356 88T365 100L372 110L408 253Q444 395 448 404Q461 431 491 431Q504 431 512 424T523 412T525 402L449 84Q448 79 448 68Q448 43 455 35T476 26Q485 27 496 35Q517 55 537 131Q543 151 547 152Q549 153 557 153H561Q580 153 580 144Q580 138 575 117T555 63T523 13Q510 0 491 -8Q483 -10 467 -10Q446 -10 429 -4T402 11T385 29T376 44T374 51L368 45Q362 39 350 30T324 12T288 -4T246 -11Q199 -11 153 12L129 -85Q108 -167 104 -180T92 -202Q76 -216 58 -216Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(7795,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(8850.8,0)\"><path data-c=\"37\" d=\"M55 458Q56 460 72 567L88 674Q88 676 108 676H128V672Q128 662 143 655T195 646T364 644H485V605L417 512Q408 500 387 472T360 435T339 403T319 367T305 330T292 284T284 230T278 162T275 80Q275 66 275 52T274 28V19Q270 2 255 -10T221 -22Q210 -22 200 -19T179 0T168 40Q168 198 265 368Q285 400 349 489L395 552H302Q128 552 119 546Q113 543 108 522T98 479L95 458V455H55V458Z\"></path><path data-c=\"30\" d=\"M96 585Q152 666 249 666Q297 666 345 640T423 548Q460 465 460 320Q460 165 417 83Q397 41 362 16T301 -15T250 -22Q224 -22 198 -16T137 16T82 83Q39 165 39 320Q39 494 96 585ZM321 597Q291 629 250 629Q208 629 178 597Q153 571 145 525T137 333Q137 175 145 125T181 46Q209 16 250 16Q290 16 318 46Q347 76 354 130T362 333Q362 478 354 524T321 597Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(9850.8,0)\"><path data-c=\"2C\" d=\"M78 35T78 60T94 103T137 121Q165 121 187 96T210 8Q210 -27 201 -60T180 -117T154 -158T130 -185T117 -194Q113 -194 104 -185T95 -172Q95 -168 106 -156T131 -126T157 -76T173 -3V9L172 8Q170 7 167 6T161 3T152 1T140 0Q113 0 96 17Z\"></path></g><g data-mml-node=\"mtext\" transform=\"translate(10295.4,0)\"><path data-c=\"A0\" d=\"\"></path></g><g data-mml-node=\"mi\" transform=\"translate(10545.4,0)\"><path data-c=\"1D70E\" d=\"M184 -11Q116 -11 74 34T31 147Q31 247 104 333T274 430Q275 431 414 431H552Q553 430 555 429T559 427T562 425T565 422T567 420T569 416T570 412T571 407T572 401Q572 357 507 357Q500 357 490 357T476 358H416L421 348Q439 310 439 263Q439 153 359 71T184 -11ZM361 278Q361 358 276 358Q152 358 115 184Q114 180 114 178Q106 141 106 117Q106 67 131 47T188 26Q242 26 287 73Q316 103 334 153T356 233T361 278Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(11394.2,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(12450,0)\"><path data-c=\"36\" d=\"M42 313Q42 476 123 571T303 666Q372 666 402 630T432 550Q432 525 418 510T379 495Q356 495 341 509T326 548Q326 592 373 601Q351 623 311 626Q240 626 194 566Q147 500 147 364L148 360Q153 366 156 373Q197 433 263 433H267Q313 433 348 414Q372 400 396 374T435 317Q456 268 456 210V192Q456 169 451 149Q440 90 387 34T253 -22Q225 -22 199 -14T143 16T92 75T56 172T42 313ZM257 397Q227 397 205 380T171 335T154 278T148 216Q148 133 160 97T198 39Q222 21 251 21Q302 21 329 59Q342 77 347 104T352 209Q352 289 347 316T329 361Q302 397 257 397Z\"></path></g></g></g>"},"\\textsf{Test }B{:}\\ x = 30,\\ \\mu = 24,\\ \\sigma = 2.4":{"x":0,"w":13820,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mtext\"><path data-c=\"1D5B3\" d=\"M36 608V688H644V608H518L392 609V0H288V609L162 608H36Z\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(681,0)\"></path><path data-c=\"1D5CC\" d=\"M33 326Q33 376 60 408T117 450T175 460H190Q245 460 272 454T345 429Q345 428 338 388L331 349Q278 386 188 386H183Q119 386 119 336Q119 307 142 295T210 276T278 256Q360 213 360 130Q360 108 354 88T332 43T281 5T195 -10Q152 -10 111 1T49 22T28 35Q29 36 32 56T39 95T43 115T51 110T72 99T102 85T143 73T193 68Q274 68 274 123Q274 152 248 167Q234 178 187 186T115 207Q66 229 46 273Q33 298 33 326Z\" transform=\"translate(1125,0)\"></path><path data-c=\"1D5CD\" d=\"M333 27Q333 24 314 16T257 -1T184 -10H172Q146 -10 128 14T105 58T99 91Q95 113 95 251V371H18V444H98V571H182V444H316V371H182V253Q183 128 189 104Q199 68 234 68Q277 72 314 98Q315 93 323 61T333 27Z\" transform=\"translate(1508,0)\"></path><path data-c=\"A0\" d=\"\" transform=\"translate(1869,0)\"></path></g><g data-mml-node=\"mi\" transform=\"translate(2119,0)\"><path data-c=\"1D435\" d=\"M231 637Q204 637 199 638T194 649Q194 676 205 682Q206 683 335 683Q594 683 608 681Q671 671 713 636T756 544Q756 480 698 429T565 360L555 357Q619 348 660 311T702 219Q702 146 630 78T453 1Q446 0 242 0Q42 0 39 2Q35 5 35 10Q35 17 37 24Q42 43 47 45Q51 46 62 46H68Q95 46 128 49Q142 52 147 61Q150 65 219 339T288 628Q288 635 231 637ZM649 544Q649 574 634 600T585 634Q578 636 493 637Q473 637 451 637T416 636H403Q388 635 384 626Q382 622 352 506Q352 503 351 500L320 374H401Q482 374 494 376Q554 386 601 434T649 544ZM595 229Q595 273 572 302T512 336Q506 337 429 337Q311 337 310 336Q310 334 293 263T258 122L240 52Q240 48 252 48T333 46Q422 46 429 47Q491 54 543 105T595 229Z\"></path></g><g data-mml-node=\"TeXAtom\" data-mjx-texclass=\"ORD\" transform=\"translate(2878,0)\"><g data-mml-node=\"mo\"><path data-c=\"3A\" d=\"M78 370Q78 394 95 412T138 430Q162 430 180 414T199 371Q199 346 182 328T139 310T96 327T78 370ZM78 60Q78 84 95 102T138 120Q162 120 180 104T199 61Q199 36 182 18T139 0T96 17T78 60Z\"></path></g></g><g data-mml-node=\"mtext\" transform=\"translate(3156,0)\"><path data-c=\"A0\" d=\"\"></path></g><g data-mml-node=\"mi\" transform=\"translate(3406,0)\"><path data-c=\"1D465\" d=\"M52 289Q59 331 106 386T222 442Q257 442 286 424T329 379Q371 442 430 442Q467 442 494 420T522 361Q522 332 508 314T481 292T458 288Q439 288 427 299T415 328Q415 374 465 391Q454 404 425 404Q412 404 406 402Q368 386 350 336Q290 115 290 78Q290 50 306 38T341 26Q378 26 414 59T463 140Q466 150 469 151T485 153H489Q504 153 504 145Q504 144 502 134Q486 77 440 33T333 -11Q263 -11 227 52Q186 -10 133 -10H127Q78 -10 57 16T35 71Q35 103 54 123T99 143Q142 143 142 101Q142 81 130 66T107 46T94 41L91 40Q91 39 97 36T113 29T132 26Q168 26 194 71Q203 87 217 139T245 247T261 313Q266 340 266 352Q266 380 251 392T217 404Q177 404 142 372T93 290Q91 281 88 280T72 278H58Q52 284 52 289Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(4255.8,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(5311.6,0)\"><path data-c=\"33\" d=\"M127 463Q100 463 85 480T69 524Q69 579 117 622T233 665Q268 665 277 664Q351 652 390 611T430 522Q430 470 396 421T302 350L299 348Q299 347 308 345T337 336T375 315Q457 262 457 175Q457 96 395 37T238 -22Q158 -22 100 21T42 130Q42 158 60 175T105 193Q133 193 151 175T169 130Q169 119 166 110T159 94T148 82T136 74T126 70T118 67L114 66Q165 21 238 21Q293 21 321 74Q338 107 338 175V195Q338 290 274 322Q259 328 213 329L171 330L168 332Q166 335 166 348Q166 366 174 366Q202 366 232 371Q266 376 294 413T322 525V533Q322 590 287 612Q265 626 240 626Q208 626 181 615T143 592T132 580H135Q138 579 143 578T153 573T165 566T175 555T183 540T186 520Q186 498 172 481T127 463Z\"></path><path data-c=\"30\" d=\"M96 585Q152 666 249 666Q297 666 345 640T423 548Q460 465 460 320Q460 165 417 83Q397 41 362 16T301 -15T250 -22Q224 -22 198 -16T137 16T82 83Q39 165 39 320Q39 494 96 585ZM321 597Q291 629 250 629Q208 629 178 597Q153 571 145 525T137 333Q137 175 145 125T181 46Q209 16 250 16Q290 16 318 46Q347 76 354 130T362 333Q362 478 354 524T321 597Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(6311.6,0)\"><path data-c=\"2C\" d=\"M78 35T78 60T94 103T137 121Q165 121 187 96T210 8Q210 -27 201 -60T180 -117T154 -158T130 -185T117 -194Q113 -194 104 -185T95 -172Q95 -168 106 -156T131 -126T157 -76T173 -3V9L172 8Q170 7 167 6T161 3T152 1T140 0Q113 0 96 17Z\"></path></g><g data-mml-node=\"mtext\" transform=\"translate(6756.2,0)\"><path data-c=\"A0\" d=\"\"></path></g><g data-mml-node=\"mi\" transform=\"translate(7006.2,0)\"><path data-c=\"1D707\" d=\"M58 -216Q44 -216 34 -208T23 -186Q23 -176 96 116T173 414Q186 442 219 442Q231 441 239 435T249 423T251 413Q251 401 220 279T187 142Q185 131 185 107V99Q185 26 252 26Q261 26 270 27T287 31T302 38T315 45T327 55T338 65T348 77T356 88T365 100L372 110L408 253Q444 395 448 404Q461 431 491 431Q504 431 512 424T523 412T525 402L449 84Q448 79 448 68Q448 43 455 35T476 26Q485 27 496 35Q517 55 537 131Q543 151 547 152Q549 153 557 153H561Q580 153 580 144Q580 138 575 117T555 63T523 13Q510 0 491 -8Q483 -10 467 -10Q446 -10 429 -4T402 11T385 29T376 44T374 51L368 45Q362 39 350 30T324 12T288 -4T246 -11Q199 -11 153 12L129 -85Q108 -167 104 -180T92 -202Q76 -216 58 -216Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(7887,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(8942.8,0)\"><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\"></path><path data-c=\"34\" d=\"M462 0Q444 3 333 3Q217 3 199 0H190V46H221Q241 46 248 46T265 48T279 53T286 61Q287 63 287 115V165H28V211L179 442Q332 674 334 675Q336 677 355 677H373L379 671V211H471V165H379V114Q379 73 379 66T385 54Q393 47 442 46H471V0H462ZM293 211V545L74 212L183 211H293Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(9942.8,0)\"><path data-c=\"2C\" d=\"M78 35T78 60T94 103T137 121Q165 121 187 96T210 8Q210 -27 201 -60T180 -117T154 -158T130 -185T117 -194Q113 -194 104 -185T95 -172Q95 -168 106 -156T131 -126T157 -76T173 -3V9L172 8Q170 7 167 6T161 3T152 1T140 0Q113 0 96 17Z\"></path></g><g data-mml-node=\"mtext\" transform=\"translate(10387.4,0)\"><path data-c=\"A0\" d=\"\"></path></g><g data-mml-node=\"mi\" transform=\"translate(10637.4,0)\"><path data-c=\"1D70E\" d=\"M184 -11Q116 -11 74 34T31 147Q31 247 104 333T274 430Q275 431 414 431H552Q553 430 555 429T559 427T562 425T565 422T567 420T569 416T570 412T571 407T572 401Q572 357 507 357Q500 357 490 357T476 358H416L421 348Q439 310 439 263Q439 153 359 71T184 -11ZM361 278Q361 358 276 358Q152 358 115 184Q114 180 114 178Q106 141 106 117Q106 67 131 47T188 26Q242 26 287 73Q316 103 334 153T356 233T361 278Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(11486.2,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(12542,0)\"><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\"></path><path data-c=\"2E\" d=\"M78 60Q78 84 95 102T138 120Q162 120 180 104T199 61Q199 36 182 18T139 0T96 17T78 60Z\" transform=\"translate(500,0)\"></path><path data-c=\"34\" d=\"M462 0Q444 3 333 3Q217 3 199 0H190V46H221Q241 46 248 46T265 48T279 53T286 61Q287 63 287 115V165H28V211L179 442Q332 674 334 675Q336 677 355 677H373L379 671V211H471V165H379V114Q379 73 379 66T385 54Q393 47 442 46H471V0H462ZM293 211V545L74 212L183 211H293Z\" transform=\"translate(778,0)\"></path></g></g></g>"},"z = (30 - 24) / 2.4 = 2.5":{"x":0,"w":10188.6,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mi\"><path data-c=\"1D467\" d=\"M347 338Q337 338 294 349T231 360Q211 360 197 356T174 346T162 335T155 324L153 320Q150 317 138 317Q117 317 117 325Q117 330 120 339Q133 378 163 406T229 440Q241 442 246 442Q271 442 291 425T329 392T367 375Q389 375 411 408T434 441Q435 442 449 442H462Q468 436 468 434Q468 430 463 420T449 399T432 377T418 358L411 349Q368 298 275 214T160 106L148 94L163 93Q185 93 227 82T290 71Q328 71 360 90T402 140Q406 149 409 151T424 153Q443 153 443 143Q443 138 442 134Q425 72 376 31T278 -11Q252 -11 232 6T193 40T155 57Q111 57 76 -3Q70 -11 59 -11H54H41Q35 -5 35 -2Q35 13 93 84Q132 129 225 214T340 322Q352 338 347 338Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(742.8,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(1798.6,0)\"><path data-c=\"28\" d=\"M94 250Q94 319 104 381T127 488T164 576T202 643T244 695T277 729T302 750H315H319Q333 750 333 741Q333 738 316 720T275 667T226 581T184 443T167 250T184 58T225 -81T274 -167T316 -220T333 -241Q333 -250 318 -250H315H302L274 -226Q180 -141 137 -14T94 250Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(2187.6,0)\"><path data-c=\"33\" d=\"M127 463Q100 463 85 480T69 524Q69 579 117 622T233 665Q268 665 277 664Q351 652 390 611T430 522Q430 470 396 421T302 350L299 348Q299 347 308 345T337 336T375 315Q457 262 457 175Q457 96 395 37T238 -22Q158 -22 100 21T42 130Q42 158 60 175T105 193Q133 193 151 175T169 130Q169 119 166 110T159 94T148 82T136 74T126 70T118 67L114 66Q165 21 238 21Q293 21 321 74Q338 107 338 175V195Q338 290 274 322Q259 328 213 329L171 330L168 332Q166 335 166 348Q166 366 174 366Q202 366 232 371Q266 376 294 413T322 525V533Q322 590 287 612Q265 626 240 626Q208 626 181 615T143 592T132 580H135Q138 579 143 578T153 573T165 566T175 555T183 540T186 520Q186 498 172 481T127 463Z\"></path><path data-c=\"30\" d=\"M96 585Q152 666 249 666Q297 666 345 640T423 548Q460 465 460 320Q460 165 417 83Q397 41 362 16T301 -15T250 -22Q224 -22 198 -16T137 16T82 83Q39 165 39 320Q39 494 96 585ZM321 597Q291 629 250 629Q208 629 178 597Q153 571 145 525T137 333Q137 175 145 125T181 46Q209 16 250 16Q290 16 318 46Q347 76 354 130T362 333Q362 478 354 524T321 597Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(3409.8,0)\"><path data-c=\"2212\" d=\"M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(4410,0)\"><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\"></path><path data-c=\"34\" d=\"M462 0Q444 3 333 3Q217 3 199 0H190V46H221Q241 46 248 46T265 48T279 53T286 61Q287 63 287 115V165H28V211L179 442Q332 674 334 675Q336 677 355 677H373L379 671V211H471V165H379V114Q379 73 379 66T385 54Q393 47 442 46H471V0H462ZM293 211V545L74 212L183 211H293Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(5410,0)\"><path data-c=\"29\" d=\"M60 749L64 750Q69 750 74 750H86L114 726Q208 641 251 514T294 250Q294 182 284 119T261 12T224 -76T186 -143T145 -194T113 -227T90 -246Q87 -249 86 -250H74Q66 -250 63 -250T58 -247T55 -238Q56 -237 66 -225Q221 -64 221 250T66 725Q56 737 55 738Q55 746 60 749Z\"></path></g><g data-mml-node=\"TeXAtom\" data-mjx-texclass=\"ORD\" transform=\"translate(5799,0)\"><g data-mml-node=\"mo\"><path data-c=\"2F\" d=\"M423 750Q432 750 438 744T444 730Q444 725 271 248T92 -240Q85 -250 75 -250Q68 -250 62 -245T56 -231Q56 -221 230 257T407 740Q411 750 423 750Z\"></path></g></g><g data-mml-node=\"mn\" transform=\"translate(6299,0)\"><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\"></path><path data-c=\"2E\" d=\"M78 60Q78 84 95 102T138 120Q162 120 180 104T199 61Q199 36 182 18T139 0T96 17T78 60Z\" transform=\"translate(500,0)\"></path><path data-c=\"34\" d=\"M462 0Q444 3 333 3Q217 3 199 0H190V46H221Q241 46 248 46T265 48T279 53T286 61Q287 63 287 115V165H28V211L179 442Q332 674 334 675Q336 677 355 677H373L379 671V211H471V165H379V114Q379 73 379 66T385 54Q393 47 442 46H471V0H462ZM293 211V545L74 212L183 211H293Z\" transform=\"translate(778,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(7854.8,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(8910.6,0)\"><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\"></path><path data-c=\"2E\" d=\"M78 60Q78 84 95 102T138 120Q162 120 180 104T199 61Q199 36 182 18T139 0T96 17T78 60Z\" transform=\"translate(500,0)\"></path><path data-c=\"35\" d=\"M164 157Q164 133 148 117T109 101H102Q148 22 224 22Q294 22 326 82Q345 115 345 210Q345 313 318 349Q292 382 260 382H254Q176 382 136 314Q132 307 129 306T114 304Q97 304 95 310Q93 314 93 485V614Q93 664 98 664Q100 666 102 666Q103 666 123 658T178 642T253 634Q324 634 389 662Q397 666 402 666Q410 666 410 648V635Q328 538 205 538Q174 538 149 544L139 546V374Q158 388 169 396T205 412T256 420Q337 420 393 355T449 201Q449 109 385 44T229 -22Q148 -22 99 32T50 154Q50 178 61 192T84 210T107 214Q132 214 148 197T164 157Z\" transform=\"translate(778,0)\"></path></g></g></g>"},"z = (82 - 70) / 6 = 2.0":{"x":0,"w":9410.6,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mi\"><path data-c=\"1D467\" d=\"M347 338Q337 338 294 349T231 360Q211 360 197 356T174 346T162 335T155 324L153 320Q150 317 138 317Q117 317 117 325Q117 330 120 339Q133 378 163 406T229 440Q241 442 246 442Q271 442 291 425T329 392T367 375Q389 375 411 408T434 441Q435 442 449 442H462Q468 436 468 434Q468 430 463 420T449 399T432 377T418 358L411 349Q368 298 275 214T160 106L148 94L163 93Q185 93 227 82T290 71Q328 71 360 90T402 140Q406 149 409 151T424 153Q443 153 443 143Q443 138 442 134Q425 72 376 31T278 -11Q252 -11 232 6T193 40T155 57Q111 57 76 -3Q70 -11 59 -11H54H41Q35 -5 35 -2Q35 13 93 84Q132 129 225 214T340 322Q352 338 347 338Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(742.8,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(1798.6,0)\"><path data-c=\"28\" d=\"M94 250Q94 319 104 381T127 488T164 576T202 643T244 695T277 729T302 750H315H319Q333 750 333 741Q333 738 316 720T275 667T226 581T184 443T167 250T184 58T225 -81T274 -167T316 -220T333 -241Q333 -250 318 -250H315H302L274 -226Q180 -141 137 -14T94 250Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(2187.6,0)\"><path data-c=\"38\" d=\"M70 417T70 494T124 618T248 666Q319 666 374 624T429 515Q429 485 418 459T392 417T361 389T335 371T324 363L338 354Q352 344 366 334T382 323Q457 264 457 174Q457 95 399 37T249 -22Q159 -22 101 29T43 155Q43 263 172 335L154 348Q133 361 127 368Q70 417 70 494ZM286 386L292 390Q298 394 301 396T311 403T323 413T334 425T345 438T355 454T364 471T369 491T371 513Q371 556 342 586T275 624Q268 625 242 625Q201 625 165 599T128 534Q128 511 141 492T167 463T217 431Q224 426 228 424L286 386ZM250 21Q308 21 350 55T392 137Q392 154 387 169T375 194T353 216T330 234T301 253T274 270Q260 279 244 289T218 306L210 311Q204 311 181 294T133 239T107 157Q107 98 150 60T250 21Z\"></path><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(3409.8,0)\"><path data-c=\"2212\" d=\"M84 237T84 250T98 270H679Q694 262 694 250T679 230H98Q84 237 84 250Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(4410,0)\"><path data-c=\"37\" d=\"M55 458Q56 460 72 567L88 674Q88 676 108 676H128V672Q128 662 143 655T195 646T364 644H485V605L417 512Q408 500 387 472T360 435T339 403T319 367T305 330T292 284T284 230T278 162T275 80Q275 66 275 52T274 28V19Q270 2 255 -10T221 -22Q210 -22 200 -19T179 0T168 40Q168 198 265 368Q285 400 349 489L395 552H302Q128 552 119 546Q113 543 108 522T98 479L95 458V455H55V458Z\"></path><path data-c=\"30\" d=\"M96 585Q152 666 249 666Q297 666 345 640T423 548Q460 465 460 320Q460 165 417 83Q397 41 362 16T301 -15T250 -22Q224 -22 198 -16T137 16T82 83Q39 165 39 320Q39 494 96 585ZM321 597Q291 629 250 629Q208 629 178 597Q153 571 145 525T137 333Q137 175 145 125T181 46Q209 16 250 16Q290 16 318 46Q347 76 354 130T362 333Q362 478 354 524T321 597Z\" transform=\"translate(500,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(5410,0)\"><path data-c=\"29\" d=\"M60 749L64 750Q69 750 74 750H86L114 726Q208 641 251 514T294 250Q294 182 284 119T261 12T224 -76T186 -143T145 -194T113 -227T90 -246Q87 -249 86 -250H74Q66 -250 63 -250T58 -247T55 -238Q56 -237 66 -225Q221 -64 221 250T66 725Q56 737 55 738Q55 746 60 749Z\"></path></g><g data-mml-node=\"TeXAtom\" data-mjx-texclass=\"ORD\" transform=\"translate(5799,0)\"><g data-mml-node=\"mo\"><path data-c=\"2F\" d=\"M423 750Q432 750 438 744T444 730Q444 725 271 248T92 -240Q85 -250 75 -250Q68 -250 62 -245T56 -231Q56 -221 230 257T407 740Q411 750 423 750Z\"></path></g></g><g data-mml-node=\"mn\" transform=\"translate(6299,0)\"><path data-c=\"36\" d=\"M42 313Q42 476 123 571T303 666Q372 666 402 630T432 550Q432 525 418 510T379 495Q356 495 341 509T326 548Q326 592 373 601Q351 623 311 626Q240 626 194 566Q147 500 147 364L148 360Q153 366 156 373Q197 433 263 433H267Q313 433 348 414Q372 400 396 374T435 317Q456 268 456 210V192Q456 169 451 149Q440 90 387 34T253 -22Q225 -22 199 -14T143 16T92 75T56 172T42 313ZM257 397Q227 397 205 380T171 335T154 278T148 216Q148 133 160 97T198 39Q222 21 251 21Q302 21 329 59Q342 77 347 104T352 209Q352 289 347 316T329 361Q302 397 257 397Z\"></path></g><g data-mml-node=\"mo\" transform=\"translate(7076.8,0)\"><path data-c=\"3D\" d=\"M56 347Q56 360 70 367H707Q722 359 722 347Q722 336 708 328L390 327H72Q56 332 56 347ZM56 153Q56 168 72 173H708Q722 163 722 153Q722 140 707 133H70Q56 140 56 153Z\"></path></g><g data-mml-node=\"mn\" transform=\"translate(8132.6,0)\"><path data-c=\"32\" d=\"M109 429Q82 429 66 447T50 491Q50 562 103 614T235 666Q326 666 387 610T449 465Q449 422 429 383T381 315T301 241Q265 210 201 149L142 93L218 92Q375 92 385 97Q392 99 409 186V189H449V186Q448 183 436 95T421 3V0H50V19V31Q50 38 56 46T86 81Q115 113 136 137Q145 147 170 174T204 211T233 244T261 278T284 308T305 340T320 369T333 401T340 431T343 464Q343 527 309 573T212 619Q179 619 154 602T119 569T109 550Q109 549 114 549Q132 549 151 535T170 489Q170 464 154 447T109 429Z\"></path><path data-c=\"2E\" d=\"M78 60Q78 84 95 102T138 120Q162 120 180 104T199 61Q199 36 182 18T139 0T96 17T78 60Z\" transform=\"translate(500,0)\"></path><path data-c=\"30\" d=\"M96 585Q152 666 249 666Q297 666 345 640T423 548Q460 465 460 320Q460 165 417 83Q397 41 362 16T301 -15T250 -22Q224 -22 198 -16T137 16T82 83Q39 165 39 320Q39 494 96 585ZM321 597Q291 629 250 629Q208 629 178 597Q153 571 145 525T137 333Q137 175 145 125T181 46Q209 16 250 16Q290 16 318 46Q347 76 354 130T362 333Q362 478 354 524T321 597Z\" transform=\"translate(778,0)\"></path></g></g></g>"}});
+  var META = {"id":"1.9","title":"Comparing distributions","sub":"Boxplots and z-scores","still":19.5};
+  var DUR = 22.8;
+  var scene = (function (K) {
+  const { T, C, R, L, e, lin, f, INK, GRAY, BLUE, ORANGE } = K;
+  // 1.9: two boxplots of test scores on one axis (center, spread, an outlier, in context), then z-scores to compare a value on test A with a value on test B.
+  const wrap = (w, out) => out >= 1 ? "" : `<g transform="translate(0,${(out * 320).toFixed(1)})" opacity="${(1 - out).toFixed(3)}">${w}</g>`;
+  const X = lin(30, 100, 50, 550), ay = 360;
+  const A = { mn: 55, q1: 65, md: 72, q3: 78, mx: 90, out: 40, col: BLUE, y: 200, name: "Class A" }, B = { mn: 40, q1: 58, md: 70, q3: 82, mx: 100, out: null, col: ORANGE, y: 300, name: "Class B" };
+  const box = (b, a, g) => {
+    const y = b.y; let z = R(X(b.q1), y - 30, (X(b.q3) - X(b.q1)) * g, 60, { fill: b.col, op: .3 * a }) + R(X(b.q1), y - 30, (X(b.q3) - X(b.q1)) * g, 60, { fill: "none", stroke: INK, sw: 3, op: a });
+    z += L(X(b.md), y - 30, X(b.md), y + 30, { stroke: INK, sw: 5, op: a * g }) + L(X(b.mn), y, X(b.q1), y, { stroke: INK, sw: 3, op: a * g }) + L(X(b.q3), y, X(b.mx), y, { stroke: INK, sw: 3, op: a * g });
+    z += L(X(b.mn), y - 12, X(b.mn), y + 12, { stroke: INK, sw: 3, op: a * g }) + L(X(b.mx), y - 12, X(b.mx), y + 12, { stroke: INK, sw: 3, op: a * g });
+    if (b.out) z += C(X(b.out), y, 7 * g, { fill: ORANGE, stroke: INK, sw: 2, op: a });
+    return z + T(52, y - 44, b.name, { size: 20, w: 800, anchor: "start", fill: b.col, op: a });
+  };
+  return { frame(t) {
+    const a0 = e(t, .2, .8);
+    let w = L(50, ay, 550, ay, { sw: 3, op: a0 }) + [30, 40, 50, 60, 70, 80, 90, 100].map(v => L(X(v), ay, X(v), ay + 8, { sw: 2.5, op: a0 }) + T(X(v), ay + 34, v, { size: 20, w: 700, fill: GRAY, op: a0 })).join("");
+    w += T(300, 128, "Test scores in two classes", { size: 22, w: 700, fill: GRAY, op: e(t, .3, .9) });
+    w += box(A, e(t, 1.0, 1.6), e(t, 1.4, 2.8)) + box(B, e(t, 2.4, 3.0), e(t, 2.8, 4.2));
+    // compare in context
+    const ln = (str, y, a, col = INK, size = 21) => T(300, y, str, { size, w: 800, fill: col, op: e(t, a, a + .6) * (1 - e(t, 17.6, 18.1)) });
+    w += ln("Center: the medians are close, 72 and 70", 440, 4.8) + ln("Spread: class B varies more (IQR 24 vs 13)", 474, 6.4) + ln("Unusual: one score in class A, 40, is far below the rest", 508, 8.0, ORANGE, 20);
+    w += ln("Class B: wider range.  Class A: more consistent", 542, 10.0, GRAY, 20);
+    let s = wrap(w, e(t, 11.6, 12.3));
+    // z-scores
+    if (t > 12.0) {
+      const Z = lin(-3, 3, 70, 530), zy = 300;
+      s += T(300, 130, "z-scores compare positions across different scales", { size: 22, w: 700, fill: GRAY, op: e(t, 12.4, 13.0) });
+      s += L(70, zy, 530, zy, { sw: 3, op: e(t, 12.4, 13.0) }) + [-3, -2, -1, 0, 1, 2, 3].map(v => L(Z(v), zy, Z(v), zy + 8, { sw: 2.5, op: e(t, 12.4, 13.0) }) + T(Z(v), zy + 34, (v < 0 ? "−" : "") + Math.abs(v), { size: 20, w: 700, fill: GRAY, op: e(t, 12.4, 13.0) })).join("");
+      s += T(300, 176, "Test A: x = 82, μ = 70, σ = 6", { size: 21, w: 800, fill: BLUE, op: e(t, 13.2, 13.8) }) + T(300, 208, "z = (82 − 70) / 6 = 2.0", { size: 24, w: 800, fill: BLUE, op: e(t, 13.8, 14.4) });
+      s += C(Z(2), zy - 14, 9 * e(t, 14.4, 15.0), { fill: BLUE, stroke: INK, sw: 2.5 });
+      s += T(300, 400, "Test B: x = 30, μ = 24, σ = 2.4", { size: 21, w: 800, fill: ORANGE, op: e(t, 15.2, 15.8) }) + T(300, 432, "z = (30 − 24) / 2.4 = 2.5", { size: 24, w: 800, fill: ORANGE, op: e(t, 15.8, 16.4) });
+      s += C(Z(2.5), zy - 14, 9 * e(t, 16.4, 17.0), { fill: ORANGE, stroke: INK, sw: 2.5 });
+      s += T(300, 490, "A z-score counts standard deviations from the mean", { size: 21, w: 700, op: e(t, 17.4, 18.0) });
+      s += T(300, 524, "30 on test B is the higher relative position", { size: 21, w: 800, fill: ORANGE, op: e(t, 18.4, 19.0) });
+    }
+    return s;
+  } };
+})(K);
+  var qs = location.search;
+  if (/transparent/.test(qs)) document.documentElement.classList.add("transparent");
+  var svg = document.getElementById("s");
+  K.TH.onchange = function (p) { try { document.documentElement.style.setProperty("--surface", p.surface); } catch (e) { } };
+  K.TH.onchange(K.TH.pal); K.TH.watch();
+  function draw(t) {
+    K.TH.poll();
+    var a = K.clamp(t / 0.2) * (1 - K.clamp((t - (DUR - 0.4)) / 0.4));
+    svg.innerHTML = K.resolve('<g opacity="' + a.toFixed(3) + '">' +
+      K.T(300, 56, META.title, { size: 30, w: 700 }) + K.T(300, 88, META.sub, { size: 20, w: 500, fill: K.GRAY }) +
+      scene.frame(t) +
+      K.T(588, 592, "AP Stats " + META.id, { size: 14, w: 500, fill: "@muted", anchor: "end" }) + '</g>');
+  }
+  var tm = qs.match(/[?&]t=([0-9.]+)/);
+  if (tm) { draw(parseFloat(tm[1])); return; }
+  if (/still/.test(qs) || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { draw(META.still); return; }
+  // Playback state: clock = time on the animation timeline. speed can be changed at any moment.
+  var clock = 0, last = null, playing = true, speed = 1;
+  var sm = qs.match(/[?&]speed=([0-9.]+)/); if (sm) speed = parseFloat(sm[1]) || 1;
+  function frame(now) {
+    if (last !== null && playing) clock = (clock + (now - last) / 1000 * speed) % DUR;
+    last = now; draw(clock); requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // Hooks for a future control bar (or a parent page): window.anim.setSpeed(0.5), .pause(), .play(), .seek(3.2)
+  window.anim = {
+    time: function () { return clock; }, chapters: [{"id":"boxplots","t":1,"rest":4.6},{"id":"compare","t":4.8,"rest":10.6},{"id":"zscores","t":12.4,"rest":19.6}],
+    setSpeed: function (v) { speed = v; }, getSpeed: function () { return speed; },
+    play: function () { playing = true; }, pause: function () { playing = false; },
+    seek: function (v) { clock = ((v % DUR) + DUR) % DUR; }, duration: DUR
+  };
+  document.getElementById("card").addEventListener("click", function () { playing = !playing; });
+})();
+</script>
+</body>
+</html>

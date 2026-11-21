@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1.8 Building a boxplot</title>
+<style>
+  html, body { margin: 0; background: var(--surface, #fff); }
+  /* add ?transparent to the URL (or iframe src) for a see-through background */
+  html.transparent, html.transparent body { background: transparent; }
+  body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+  #card { width: min(100vw, 100vh, 640px); aspect-ratio: 1 / 1; cursor: pointer; }
+  svg { width: 100%; height: 100%; display: block; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .mono { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+</style>
+</head>
+<body>
+<div id="card" title="Click to pause or play"><svg id="s" viewBox="0 0 600 600" role="img" aria-label="A boxplot built from the five-number summary of ten values, a fence at Q3 plus 1.5 IQR with an outlier beyond it, and three distributions showing that the mean is pulled toward the longer tail"></svg></div>
+<script>
+// Shared drawing + math kit. Embedded into every animation page via makeKit.toString().
+function makeKit(TEX, REC) {
+  /* animTheme(srcEl): semantic colors that follow the page theme. One source of truth, used in two places:
+     - pasted inside makeKit() of every animation page (srcEl = window.frameElement, the <iframe> in the CED block), and
+     - in the CED block's own script (srcEl = the .ced-anim element), so inline step images use the same colors.
+  
+     Page contract: the page defines six CSS custom properties on the iframe's ancestor (the .ced-anim block) -
+       --anim-ink      text, outlines, curves
+       --anim-surface  background the picture sits on
+       --anim-a        first series / population            (site orange)
+       --anim-b        second series / statistic            (site blue)
+       --anim-pos      "good" outcome (reject, capture)
+       --anim-neg      "bad" outcome  (fail to reject, miss)
+     Any CSS color syntax works. Missing or unreadable values fall back to DEF, which is the standalone look.
+  
+     Everything else is derived, so a new theme needs only those six values:
+       muted, line, dot, pale   mixes of ink and surface
+       a, b, pos, neg           the token, darkened toward ink only if needed to reach 3:1 on the surface (graphics)
+       at, bt, pt, nt           the same, darkened until 4.5:1 on the surface (text)  [WCAG AA]
+     Scenes use placeholders such as "@ink" and "@a"; resolve() swaps them for the current rgb() values. */
+  function animTheme(srcEl) {
+    var DEF = { ink: "#1f2a44", surface: "#ffffff", a: "#e8590c", b: "#1c7ed6", pos: "#2f9e44", neg: "#d6336c" };
+    var NAMES = ["ink", "surface", "a", "b", "pos", "neg"], TEXT = { "@a": "@at", "@b": "@bt", "@pos": "@pt", "@neg": "@nt" };
+    var self = { pal: {}, rgbs: {}, key: "", n: 19, dirty: false, onchange: null };
+    function parse(c) {
+      c = String(c).trim();
+      var m = c.match(/^#([0-9a-f]{3})$/i);
+      if (m) return m[1].split("").map(function (h) { return parseInt(h + h, 16); });
+      m = c.match(/^#([0-9a-f]{6})/i);
+      if (m) return [0, 2, 4].map(function (i) { return parseInt(m[1].substr(i, 2), 16); });
+      m = c.match(/[\d.]+/g);
+      return m && m.length >= 3 ? m.slice(0, 3).map(function (v) { return Math.round(+v); }) : null;
+    }
+    function chan(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    function lum(p) { return 0.2126 * chan(p[0]) + 0.7152 * chan(p[1]) + 0.0722 * chan(p[2]); }
+    function ratio(p, q) { var a = lum(p), b = lum(q); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); }
+    function mix(p, q, t) { return p.map(function (v, i) { return Math.round(v + (q[i] - v) * t); }); }
+    function css(p) { return "rgb(" + p.join(",") + ")"; }
+    // the lightest change toward the ink that reaches the wanted contrast on the surface
+    function fix(fg, bg, ink, want) { for (var i = 0; i <= 20; i++) { var c = mix(fg, ink, i / 20); if (ratio(c, bg) >= want) return c; } return ink; }
+    function toRgb(v) {   // any CSS color -> [r,g,b], via the browser's own parser
+      if (!v) return null;
+      var p = parse(v); if (/^#|^rgb\(/i.test(String(v).trim()) && p) return p;
+      try {
+        var el = document.createElement("span"); el.style.color = v; if (!el.style.color) return null;
+        document.body.appendChild(el); var c = getComputedStyle(el).color; document.body.removeChild(el); return parse(c);
+      } catch (e) { return null; }
+    }
+    function build(t) {
+      var ink = t.ink, s = t.surface, P = {}, R = {};
+      R.ink = ink; R.surface = s;
+      R.muted = fix(mix(ink, s, 0.30), s, ink, 4.5); R.line = mix(ink, s, 0.78); R.dot = mix(ink, s, 0.66); R.pale = mix(ink, s, 0.88);
+      [["a", "at"], ["b", "bt"], ["pos", "pt"], ["neg", "nt"]].forEach(function (x) { R[x[0]] = fix(t[x[0]], s, ink, 3); R[x[1]] = fix(t[x[0]], s, ink, 4.5); });
+      Object.keys(R).forEach(function (n) { P[n] = css(R[n]); });
+      self.pal = P; self.rgbs = R;
+    }
+    self.defaults = DEF; self.parse = parse; self.ratio = ratio;
+    self.rgb = function (name) { name = String(name); return self.rgbs[name.charAt(0) === "@" ? name.slice(1) : name] || parse(name) || [0, 0, 0]; };   // "@b" or "b" or any css color
+    self.text = function (c) { return TEXT[c] || c; };   // text on the surface uses the 4.5:1 variant of an accent
+    self.resolve = function (s) { return s.replace(/@(ink|surface|muted|line|dot|pale|a|b|pos|neg|at|bt|pt|nt)\b/g, function (m, n) { return self.pal[n]; }); };
+    // read the six tokens from srcEl; true when something changed
+    self.read = function () {
+      var cs = null;
+      try { if (srcEl) cs = srcEl.ownerDocument.defaultView.getComputedStyle(srcEl); } catch (e) { cs = null; }
+      var t = {};
+      NAMES.forEach(function (n) { var v = cs && cs.getPropertyValue("--anim-" + n); t[n] = toRgb(v && v.trim()) || parse(DEF[n]); });
+      var key = NAMES.map(function (n) { return t[n].join(","); }).join("|");
+      if (key === self.key) return false;
+      self.key = key; build(t); if (self.onchange) self.onchange(self.pal); return true;
+    };
+    // call once per drawn frame: reads at first use, on a change signal, and every 20th frame (covers a swapped stylesheet)
+    self.poll = function () { if (!self.key || self.dirty || ++self.n % 20 === 0) { self.dirty = false; return self.read(); } return false; };
+    // change signals: class/style/data-theme edits on the page, and the page's light/dark setting
+    self.watch = function () {
+      try {
+        var d = srcEl.ownerDocument, w = d.defaultView, flag = function () { self.dirty = true; };
+        if (w.MutationObserver) { var mo = new w.MutationObserver(flag), o = { attributes: true, attributeFilter: ["class", "style", "data-theme"], subtree: false }; mo.observe(d.documentElement, o); if (d.body) mo.observe(d.body, o); var host = srcEl.closest && srcEl.closest(".ced-anim"); if (host) mo.observe(host, o); }
+        if (w.matchMedia) { var mq = w.matchMedia("(prefers-color-scheme: dark)"); if (mq.addEventListener) mq.addEventListener("change", flag); else if (mq.addListener) mq.addListener(flag); }
+      } catch (e) { /* standalone page or cross-origin parent: the periodic poll and defaults still work */ }
+    };
+    self.read();
+    return self;
+  }
+  const TH = animTheme((() => { try { return typeof window !== "undefined" ? window.frameElement : null; } catch (e) { return null; } })());
+  const INK = "@ink", GRAY = "@muted", BLUE = "@b", ORANGE = "@a", PALE = "@pale", GREEN = "@pos", PINK = "@neg", LINE = "@line", DOT = "@dot";
+  const clamp = (x, a = 0, b = 1) => Math.max(a, Math.min(b, x));
+  const ease = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  const pr = (t, a, b) => clamp((t - a) / (b - a));
+  const e = (t, a, b) => ease(pr(t, a, b));
+  const win = (t, a, b, f = .3) => clamp((t - a) / f) * (1 - clamp((t - (b - f)) / f));
+  const mixc = (a, b, t) => {
+    const pa = TH.rgb(a), pb = TH.rgb(b);
+    return "rgb(" + pa.map((v, i) => Math.round(v + (pb[i] - v) * t)).join(",") + ")";
+  };
+  const n1 = v => (Math.round(v * 10) / 10).toFixed(1);
+  const f = (v, d = 2) => v.toFixed(d);
+  const op = o => (o && o.op != null && o.op < 1) ? ` opacity="${Math.max(0, o.op).toFixed(3)}"` : "";
+  // ---- TeX labels -------------------------------------------------------------------------------------------
+  // TEX = glyph data rendered by MathJax at build time (see tex.js); REC = build-time recorder; MISS = formulas not found.
+  const MISS = [];
+  const SUB = "₀₁₂₃₄₅₆₇₈₉ₐₙᵢ", SUBV = "0123456789ani";
+  const GREEK = { "μ": "\\mu", "σ": "\\sigma", "ρ": "\\rho", "β": "\\beta", "α": "\\alpha", "χ": "\\chi", "Σ": "\\sum", "π": "\\pi", "λ": "\\lambda", "θ": "\\theta" };
+  const OPS = { "−": "-", "÷": "\\div", "·": "\\cdot", "×": "\\times", "≠": "\\ne", "≈": "\\approx", "≥": "\\ge", "≤": "\\le", "±": "\\pm", "→": "\\to", "∞": "\\infty" };
+  const MATHCH = /[\u0302\u0304μσρβαχΣπλθ²³√≥≤≠≈±×÷ŷȳ₀-₉ₐₙᵢ]/;
+  const hasMath = s => !/<[a-z]/i.test(s) && (MATHCH.test(s) || /(^|[\s(])[A-Za-z]\s*[=<>]\s*[-−\d(]/.test(s) || /^[A-Za-z]\s*=\s/.test(s) || /(^|\s)P\(/.test(s) || /(^|[\s(])[pnxyzrkXYt]($|[\s,.;:)])/.test(s) || /(^|\s)[A-Za-z]\*/.test(s) || /(^|\s)\d[\d.]*[A-Za-z]($|[\s,.;:)])/.test(s));
+  const isOp = t => /^(=|<|>|\+|−|×|÷|\/|≈|≥|≤|≠|±|·|\*)$/.test(t);
+  const isNum = t => /^[-−+]?[\d][\d.,%/]*$/.test(t);
+  const mathTok = t => MATHCH.test(t) || /^[A-Za-z]$/.test(t) && !/^[aAI]$/.test(t) || /^[A-Za-z]\(/.test(t) || /^[A-Za-z]\*$/.test(t) || /^\d[\d.]*[A-Za-z]$/.test(t) || /^[A-Za-z]\d$/.test(t) || isOp(t);
+  const toTex = m => {   // unicode math text -> TeX math
+    let u = m;
+    for (let i = u.indexOf("√"); i >= 0; i = u.indexOf("√", i + 1)) {   // sqrt with a bracket group or a plain atom
+      let j = i + 1, inner;
+      if (u[j] === "(") { let d = 0, k = j; for (; k < u.length; k++) { if (u[k] === "(") d++; if (u[k] === ")" && --d === 0) break; } inner = u.slice(j + 1, k); u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(k + 1); }
+      else { const mm = u.slice(j).match(/^[A-Za-z0-9.μσ\u0302\u0304₀-₉ₐₙᵢ²]+/); inner = mm ? mm[0] : ""; u = u.slice(0, i) + "\\sqrt{" + inner + "}" + u.slice(j + inner.length); }
+    }
+    u = u.replace(/p̂c/g, "\\hat{p}_{c}").replace(/([A-Za-z])\u0302/g, "\\hat{$1}").replace(/([A-Za-z])\u0304/g, "\\bar{$1}").replace(/ŷ/g, "\\hat{y}").replace(/ȳ/g, "\\bar{y}");
+    u = u.replace(new RegExp("[" + SUB + "]+", "g"), r => "_{" + r.split("").map(c => SUBV[SUB.indexOf(c)]).join("") + "}");
+    u = u.replace(/²/g, "^{2}").replace(/³/g, "^{3}").replace(/([A-Za-z])\*/g, "$1^{*}").replace(/(\d),(\d)/g, "$1{,}$2").replace(/%/g, "\\%");
+    u = u.replace(/[μσρβαχΣπλθ]/g, c => GREEK[c] + " ").replace(/[−÷·×≠≈≥≤±→∞]/g, c => OPS[c] + " ");
+    u = u.replace(/:( ?)/g, (m, sp) => "{:}" + (sp ? "\\ " : "")).replace(/([,;]) /g, "$1\\ ");
+    return u.replace(/ +/g, " ").trim();
+  };
+  const toText = p => "\\textsf{" + p.replace(/[\\{}]/g, "").replace(/([%&#_$])/g, "\\$1") + "}";
+  const u2tex = src => {
+    const str = String(src).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+    const toks = str.split(/ +/).map(t => { const m = t.match(/^([("“]*)(.*?)([,.;:!?)"”]*)$/); return { lead: m[1], core: m[2], trail: m[3], raw: t }; });
+    toks.forEach(k => { k.type = !k.core ? "n" : mathTok(k.core) ? "m" : isNum(k.core) ? "n" : "p"; });
+    toks.forEach((k, i) => { if (k.type === "n") { const a = toks[i - 1], b = toks[i + 1]; k.type = (a && a.type === "m") || (b && b.type === "m") ? "m" : "p"; } });
+    // a bracket opened by a math token keeps the tokens up to its closing bracket together as maths (e.g. "(x̄ − μ₀)")
+    const runs = [];
+    toks.forEach(k => { const last = runs[runs.length - 1]; if (last && last.type === k.type) last.t.push(k.raw); else runs.push({ type: k.type, t: [k.raw] }); });
+    let out = "";
+    runs.forEach((r, i) => {
+      const body = r.t.join(" ");
+      if (r.type === "m") {
+        const first = r.t[0].replace(/^[("“]+/, ""), prev = runs[i - 1], next = runs[i + 1];
+        const relFirst = isOp(first), relLast = isOp(r.t[r.t.length - 1]);
+        out += toTex(body.replace(/[“”]/g, '"'));
+        if (next && !relLast) out += "\\ ";
+        if (next && relLast) out += "";
+      } else {
+        const prev = runs[i - 1], nextr = runs[i + 1];
+        const pm = prev && prev.type === "m", relBefore = pm && isOp(prev.t[prev.t.length - 1]);
+        out += toText(body + (nextr && !(nextr.type === "m" && isOp(nextr.t[0].replace(/^[("“]+/, ""))) ? " " : ""));
+      }
+    });
+    return out;
+  };
+  const M = (x, y, tex, o = {}) => {
+    if (REC) { REC[tex] = 1; return ""; }
+    const g = TEX && TEX[tex]; if (!g) { if (MISS.length < 50) MISS.push(tex); return ""; }
+    const s = (o.size || 22) / 1000, a = o.anchor || "middle";
+    const dx = a === "start" ? g.x : a === "end" ? g.x + g.w : g.x + g.w / 2;
+    const body = (c, b, sw) => `<g color="${c}">${sw != null ? g.b.replace('stroke-width="0"', 'stroke-width="' + sw + '"') : g.b}</g>`;
+    return `<g transform="translate(${(x - dx * s).toFixed(1)},${(+y).toFixed(1)}) scale(${s})"${op(o)}>${o.halo ? body("@surface", 0, (7 / s).toFixed(0)) : ""}${body(TH.text(o.fill || INK), 0, o.bold || null)}</g>`;
+  };
+  const Mw = (tex, size = 22) => (TEX && TEX[tex]) ? TEX[tex].w * size / 1000 : 0;
+  const boldOf = w => w >= 800 ? 44 : w >= 700 ? 34 : w >= 600 ? 24 : w >= 500 ? 14 : 0;
+  const TXT = (x, y, s, o = {}) => `<text x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" font-size="${o.size || 24}" font-weight="${o.w || 600}" fill="${TH.text(o.fill || INK)}" text-anchor="${o.anchor || "middle"}"${o.mono ? ' class="mono"' : ""}${o.halo ? ' stroke="@surface" stroke-width="7" paint-order="stroke" stroke-linejoin="round"' : ""}${op(o)}>${s}</text>`;
+  // Tn: like T for a label whose numbers change every frame. Wrap the changing part in braces: Tn(x, y, "n = {" + n + "} per group").
+  // Fixed parts are typeset as a whole; the braced part is drawn digit by digit from shared glyphs (so a page stays small).
+  const Tn = (x, y, s, o = {}) => {
+    const size = (o.size || 24) * 1.08, gapU = size * 0.28;
+    const raw = String(s).split(/(\$[^$]*\$)/), parts = [];   // $...$ is raw TeX; {...} marks the part that changes
+    raw.forEach(r => { if (r[0] === "$" && r.length > 1) parts.push(r); else r.split(/(\{[^}]*\})/).forEach(q => parts.push(q)); });
+    const pcs = parts.filter(p => p !== "").map(p => {
+      if (p[0] === "{" && p[p.length - 1] === "}") return { d: p.slice(1, -1).replace(/−/g, "-").split("") };
+      const lead = Math.min(4, (p.match(/^ */)[0]).length), trail = Math.min(4, (p.match(/ *$/)[0]).length), core = p.trim();
+      return core ? { tex: core[0] === "$" ? core.slice(1, -1) : u2tex(core), lead, trail } : { tex: "", lead: 0, trail: 0, skip: true };
+    }).filter(p => !p.skip);
+    if (REC) { pcs.forEach(p => { if (p.tex) REC[p.tex] = 1; else p.d.forEach(c => { REC[c] = 1; }); }); return ""; }
+    const ok = pcs.every(p => p.tex ? TEX[p.tex] : p.d.every(c => TEX[c]));
+    if (!ok) { if (MISS.length < 50) MISS.push(String(s)); return TXT(x, y, String(s).replace(/[{}]/g, ""), o); }
+    const items = []; let w = 0;
+    pcs.forEach((p, i) => {
+      if (p.tex) { if (i > 0 && p.lead) w += gapU * p.lead; items.push({ k: p.tex, x: w }); w += TEX[p.tex].w * size / 1000; if (i < pcs.length - 1 && p.trail) w += gapU * p.trail; }
+      else p.d.forEach(c => { items.push({ k: c, x: w }); w += TEX[c].w * size / 1000; });
+    });
+    const a = o.anchor || "middle", x0 = a === "start" ? x : a === "end" ? x - w : x - w / 2;
+    return items.map(it => M(x0 + it.x, y, it.k, { size, anchor: "start", fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null })).join("");
+  };
+  // T draws text. A string containing maths notation (x̄, μ, ², √, "n = 25", ...) is typeset with the build-time TeX glyphs; if a formula is missing it falls back to plain text.
+  const T = (x, y, s, o = {}) => {
+    const str = String(s);
+    if (/\$[^$]+\$/.test(str)) return Tn(x, y, str, o);
+    if ((REC || TEX) && hasMath(str)) {
+      const tex = u2tex(str);
+      if (REC) { REC[tex] = 1; return ""; }
+      if (TEX[tex]) return M(x, y, tex, { size: (o.size || 24) * 1.08, anchor: o.anchor, fill: o.fill, op: o.op, bold: boldOf(o.w || 600) || null, halo: o.halo });
+      if (MISS.length < 50) MISS.push(tex);
+    }
+    return TXT(x, y, str, o);
+  };
+  const R = (x, y, w, h, o = {}) => `<rect x="${(+x).toFixed(1)}" y="${(+y).toFixed(1)}" width="${Math.max(0, w).toFixed(1)}" height="${Math.max(0, h).toFixed(1)}" rx="${o.rx || 0}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2.5}"${op(o)}/>`;
+  const L = (x1, y1, x2, y2, o = {}) => `<line x1="${(+x1).toFixed(1)}" y1="${(+y1).toFixed(1)}" x2="${(+x2).toFixed(1)}" y2="${(+y2).toFixed(1)}" stroke="${o.stroke || INK}" stroke-width="${o.sw || 2.5}" stroke-linecap="round"${o.dash ? ` stroke-dasharray="${o.dash}"` : ""}${op(o)}/>`;
+  const C = (cx, cy, r, o = {}) => `<circle cx="${(+cx).toFixed(1)}" cy="${(+cy).toFixed(1)}" r="${Math.max(0, r).toFixed(1)}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 2}"${op(o)}/>`;
+  const P = (d, o = {}) => `<path d="${d}" fill="${o.fill || "none"}" stroke="${o.stroke || "none"}" stroke-width="${o.sw || 3}" stroke-linejoin="round" stroke-linecap="round"${op(o)}/>`;
+  const G = (inner, o = {}) => `<g transform="translate(${(o.tx || 0).toFixed(1)},${(o.ty || 0).toFixed(1)})${o.s ? ` scale(${o.s})` : ""}"${op(o)}>${inner}</g>`;
+  const A = (x1, y1, x2, y2, o = {}) => {
+    const a = Math.atan2(y2 - y1, x2 - x1), h = o.head || 12, c = o.stroke || INK;
+    return L(x1, y1, x2 - Math.cos(a) * h * .6, y2 - Math.sin(a) * h * .6, o) +
+      `<polygon points="${x2.toFixed(1)},${y2.toFixed(1)} ${(x2 - h * Math.cos(a - .45)).toFixed(1)},${(y2 - h * Math.sin(a - .45)).toFixed(1)} ${(x2 - h * Math.cos(a + .45)).toFixed(1)},${(y2 - h * Math.sin(a + .45)).toFixed(1)}" fill="${c}"${op(o)}/>`;
+  };
+  const lin = (d0, d1, r0, r1) => v => r0 + (v - d0) * (r1 - r0) / (d1 - d0);
+  const xaxis = (X, y, vals, o = {}) => {
+    let s = L(X(vals[0]) - (o.pad || 0), y, X(vals[vals.length - 1]) + (o.pad || 0), y, { sw: 3 });
+    vals.forEach(v => { s += L(X(v), y, X(v), y + 7, { sw: 2.5 }) + T(X(v), y + (o.dy || 28), o.fmt ? o.fmt(v) : v, { size: o.size || 18, fill: o.fill || INK }); });
+    return s;
+  };
+  const curve = (fn, a, b, X, Y, n = 120) => { let d = ""; for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += (i ? "L" : "M") + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d; };
+  const area = (fn, a, b, X, Y, y0, n = 90) => { let d = "M" + X(a).toFixed(1) + " " + y0.toFixed(1); for (let i = 0; i <= n; i++) { const x = a + (b - a) * i / n; d += "L" + X(x).toFixed(1) + " " + Y(fn(x)).toFixed(1); } return d + "L" + X(b).toFixed(1) + " " + y0.toFixed(1) + "Z"; };
+
+  // ---- math ----
+  const erf = x => { const s = x < 0 ? -1 : 1; x = Math.abs(x); const t = 1 / (1 + .3275911 * x); const y = 1 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - .284496736) * t + .254829592) * t * Math.exp(-x * x); return s * y; };
+  const nPDF = (x, m = 0, s = 1) => Math.exp(-.5 * ((x - m) / s) ** 2) / (s * Math.sqrt(2 * Math.PI));
+  const nCDF = (x, m = 0, s = 1) => .5 * (1 + erf((x - m) / (s * Math.SQRT2)));
+  const lgamma = z => { const g = 7, c = [.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313, -176.61502916214059, 12.507343278686905, -.13857109526572012, 9.9843695780195716e-6, 1.5056327351493116e-7]; if (z < .5) return Math.log(Math.PI / Math.sin(Math.PI * z)) - lgamma(1 - z); z -= 1; let x = c[0]; for (let i = 1; i < g + 2; i++) x += c[i] / (z + i); const t = z + g + .5; return .5 * Math.log(2 * Math.PI) + (z + .5) * Math.log(t) - t + Math.log(x); };
+  const tPDF = (x, df) => Math.exp(lgamma((df + 1) / 2) - lgamma(df / 2)) / Math.sqrt(df * Math.PI) * Math.pow(1 + x * x / df, -(df + 1) / 2);
+  const tUpper = (x, df) => { // P(T > x) by Simpson integration
+    const b = 300, n = 3000, h = (b - x) / n; let s = tPDF(x, df) + tPDF(b, df);
+    for (let i = 1; i < n; i++) s += tPDF(x + i * h, df) * (i % 2 ? 4 : 2); return s * h / 3;
+  };
+  const tCDF = (x, df) => x >= 0 ? 1 - tUpper(x, df) : tUpper(-x, df);
+  const gammaP = (a, x) => { // regularized lower incomplete gamma
+    if (x <= 0) return 0; const gln = lgamma(a);
+    if (x < a + 1) { let ap = a, sum = 1 / a, del = sum; for (let n = 0; n < 200; n++) { ap++; del *= x / ap; sum += del; if (Math.abs(del) < Math.abs(sum) * 1e-12) break; } return sum * Math.exp(-x + a * Math.log(x) - gln); }
+    let b = x + 1 - a, c = 1e300, d = 1 / b, h = d;
+    for (let i = 1; i < 200; i++) { const an = -i * (i - a); b += 2; d = an * d + b; if (Math.abs(d) < 1e-300) d = 1e-300; c = b + an / c; if (Math.abs(c) < 1e-300) c = 1e-300; d = 1 / d; const del = d * c; h *= del; if (Math.abs(del - 1) < 1e-12) break; }
+    return 1 - Math.exp(-x + a * Math.log(x) - gln) * h;
+  };
+  const chiPDF = (x, k) => x <= 0 ? 0 : Math.exp((k / 2 - 1) * Math.log(x) - x / 2 - (k / 2) * Math.log(2) - lgamma(k / 2));
+  const chiCDF = (x, k) => gammaP(k / 2, x / 2);
+  const choose = (n, k) => { let r = 1; for (let i = 1; i <= k; i++) r = r * (n - k + i) / i; return r; };
+  const binom = (n, k, p) => choose(n, k) * Math.pow(p, k) * Math.pow(1 - p, n - k);
+  const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+  const randn = r => Math.sqrt(-2 * Math.log(1 - r())) * Math.cos(2 * Math.PI * r());
+  const shuffle = (a, r) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const mean = a => a.reduce((s, v) => s + v, 0) / a.length;
+  const sd = a => { const m = mean(a); return Math.sqrt(a.reduce((s, v) => s + (v - m) ** 2, 0) / (a.length - 1)); };
+  const med = a => { const s = a.slice().sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; };
+  const five = a => { const s = a.slice().sort((x, y) => x - y), n = s.length, h = Math.floor(n / 2); return [s[0], med(s.slice(0, h)), med(s), med(s.slice(n - h)), s[n - 1]]; };
+  const corr = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0, syy = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; syy += (y[i] - my) ** 2; }); return sxy / Math.sqrt(sxx * syy); };
+  const lsrl = (x, y) => { const mx = mean(x), my = mean(y); let sxy = 0, sxx = 0; x.forEach((v, i) => { sxy += (v - mx) * (y[i] - my); sxx += (v - mx) ** 2; }); const b = sxy / sxx; return { a: my - b * mx, b }; };
+  const fmtp = p => p < .001 ? "< 0.001" : p.toFixed(3);
+  return { INK, GRAY, BLUE, ORANGE, PALE, GREEN, PINK, LINE, DOT, TH, resolve: s => (typeof window !== "undefined" && window.__keepTokens) ? s : TH.resolve(s), clamp, ease, pr, e, win, mixc, n1, f, T, R, L, C, P, G, A, lin, xaxis, curve, area, M, Mw, Tn, MISS, u2tex, hasMath,
+    erf, nPDF, nCDF, lgamma, tPDF, tCDF, tUpper, chiPDF, chiCDF, choose, binom, rng, randn, shuffle, mean, sd, med, five, corr, lsrl, fmtp };
+}
+
+(function () {
+  var K = makeKit({"\\textsf{mean}\\approx\\textsf{median}":{"x":0,"w":6561.6,"b":"<g stroke=\"currentColor\" fill=\"currentColor\" stroke-width=\"0\" transform=\"scale(1,-1)\"><g data-mml-node=\"math\"><g data-mml-node=\"mtext\"><path data-c=\"1D5C6\" d=\"M160 392Q223 455 304 455Q359 455 386 436T430 383L437 391Q495 455 584 455Q694 455 715 354Q719 331 720 164V0H627V157Q626 315 625 320Q611 378 536 378H530Q501 378 481 358Q457 334 450 301T442 209Q442 198 442 172T443 129V0H350V157Q349 315 348 320Q334 378 259 378H253Q224 378 204 358Q180 334 173 301T165 209Q165 198 165 172T166 129V0H73V450H160V392Z\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(794,0)\"></path><path data-c=\"1D5BA\" d=\"M236 387Q209 387 184 382T141 370T111 355T91 342T83 337L82 355Q80 373 79 393T77 417Q77 419 81 421Q86 423 91 426Q155 460 227 460H238Q319 460 368 400Q393 371 400 341T408 252Q408 240 408 207T407 152V0H317V39L306 32Q244 -10 159 -10H152Q109 -10 77 22Q38 61 38 126Q38 142 39 146Q55 199 130 223T295 252H314V277Q314 305 313 310Q308 342 287 364T236 387ZM303 186Q124 180 124 126Q124 105 144 86T208 66Q284 66 309 124Q314 137 314 166V186H303Z\" transform=\"translate(1238,0)\"></path><path data-c=\"1D5C7\" d=\"M160 392Q214 446 283 454Q285 454 292 454T303 455H306Q417 455 438 354Q442 331 443 164V0H350V157Q349 315 348 320Q334 378 259 378H253Q224 378 204 358Q180 334 173 301T165 209Q165 198 165 172T166 129V0H73V450H160V392Z\" transform=\"translate(1719,0)\"></path></g><g data-mml-node=\"mo\" transform=\"translate(2513.8,0)\"><path data-c=\"2248\" d=\"M55 319Q55 360 72 393T114 444T163 472T205 482Q207 482 213 482T223 483Q262 483 296 468T393 413L443 381Q502 346 553 346Q609 346 649 375T694 454Q694 465 698 474T708 483Q722 483 722 452Q722 386 675 338T555 289Q514 289 468 310T388 357T308 404T224 426Q164 426 125 393T83 318Q81 289 69 289Q55 289 55 319ZM55 85Q55 126 72 159T114 210T163 238T205 248Q207 248 213 248T223 249Q262 249 296 234T393 179L443 147Q502 112 553 112Q609 112 649 141T694 220Q694 249 708 249T722 217Q722 153 675 104T555 55Q514 55 468 76T388 123T308 170T224 192Q164 192 125 159T83 84Q80 55 69 55Q55 55 55 85Z\"></path></g><g data-mml-node=\"mtext\" transform=\"translate(3569.6,0)\"><path data-c=\"1D5C6\" d=\"M160 392Q223 455 304 455Q359 455 386 436T430 383L437 391Q495 455 584 455Q694 455 715 354Q719 331 720 164V0H627V157Q626 315 625 320Q611 378 536 378H530Q501 378 481 358Q457 334 450 301T442 209Q442 198 442 172T443 129V0H350V157Q349 315 348 320Q334 378 259 378H253Q224 378 204 358Q180 334 173 301T165 209Q165 198 165 172T166 129V0H73V450H160V392Z\"></path><path data-c=\"1D5BE\" d=\"M28 226Q28 329 91 395T235 461Q258 461 279 456T325 436T368 397T399 332T415 238V219H113V215Q113 163 151 114T248 65Q273 65 298 70T341 82T373 96T396 108L403 113Q403 106 406 76T409 38Q409 34 408 33T393 24Q325 -10 252 -10Q155 -10 92 59T28 226ZM340 289L338 297Q335 305 333 310T327 326T317 343T304 358T286 372T263 381T233 385Q212 385 193 376T162 353T140 325T127 301T123 289H340Z\" transform=\"translate(794,0)\"></path><path data-c=\"1D5BD\" d=\"M33 224Q33 321 81 388T197 455Q277 455 342 414L351 408V694H441V0H348V44L338 37Q278 -10 198 -10Q177 -10 168 -8Q99 11 62 90Q33 148 33 224ZM348 337Q307 378 263 378Q260 378 256 378T251 379Q239 379 223 374T182 355T142 305T126 220Q126 90 225 67Q231 66 250 66H255Q306 66 342 115L348 124V337Z\" transform=\"translate(1238,0)\"></path><path data-c=\"1D5C2\" d=\"M67 576V680H171V576H67ZM74 0V444H164V0H74Z\" transform=\"translate(1755,0)\"></path><path data-c=\"1D5BA\" d=\"M236 387Q209 387 184 382T141 370T111 355T91 342T83 337L82 355Q80 373 79 393T77 417Q77 419 81 421Q86 423 91 426Q155 460 227 460H238Q319 460 368 400Q393 371 400 341T408 252Q408 240 408 207T407 152V0H317V39L306 32Q244 -10 159 -10H152Q109 -10 77 22Q38 61 38 126Q38 142 39 146Q55 199 130 223T295 252H314V277Q314 305 313 310Q308 342 287 364T236 387ZM303 186Q124 180 124 126Q124 105 144 86T208 66Q284 66 309 124Q314 137 314 166V186H303Z\" transform=\"translate(1994,0)\"></path><path data-c=\"1D5C7\" d=\"M160 392Q214 446 283 454Q285 454 292 454T303 455H306Q417 455 438 354Q442 331 443 164V0H350V157Q349 315 348 320Q334 378 259 378H253Q224 378 204 358Q180 334 173 301T165 209Q165 198 165 172T166 129V0H73V450H160V392Z\" transform=\"translate(2475,0)\"></path></g></g></g>"}});
+  var META = {"id":"1.8","title":"Building a boxplot","sub":"Five-number summary and outliers","still":19.4};
+  var DUR = 22.7;
+  var scene = (function (K) {
+  const { T, C, R, L, P, e, lin, nPDF, INK, GRAY, BLUE, ORANGE } = K;
+  // 1.8: from the five-number summary to a boxplot (the data 12, 16, 18, 20, 22, 24, 24, 26, 28, 30), the 1.5 IQR fences and an outlier,
+  // and what mean versus median say about skew.
+  const wrap = (w, out) => out >= 1 ? "" : `<g transform="translate(0,${(out * 320).toFixed(1)})" opacity="${(1 - out).toFixed(3)}">${w}</g>`;
+  const d = [12, 16, 18, 20, 22, 24, 24, 26, 28, 30], mn = 12, q1 = 18, md = 23, q3 = 26, mxv = 30;
+  const X = lin(0, 60, 50, 550), ay = 330;
+  const mean = d.reduce((s, v) => s + v, 0) / d.length;
+  const axis = a => L(50, ay, 550, ay, { sw: 3, op: a }) + [0, 10, 20, 30, 40, 50, 60].map(v => L(X(v), ay, X(v), ay + 8, { sw: 2.5, op: a }) + T(X(v), ay + 34, v, { size: 20, w: 700, fill: GRAY, op: a })).join("");
+  const sk = [["Skewed left", u => nPDF(1 - u, .3, .2) * .6 + nPDF(u, .85, .12) * 0.4, 0.8, 0.9, "mean < median"], ["Symmetric", u => nPDF(u, .5, .15), 0.5, 0.5, "mean ≈ median"], ["Skewed right", u => u * 6 * Math.exp(-u * 6) * 1.2, 0.3, 0.2, "mean > median"]];
+  return { frame(t) {
+    const a0 = e(t, .2, .8);
+    let w = axis(a0);
+    d.forEach((v, i) => { w += C(X(v), ay - 12 - (i > 0 && d[i - 1] === v ? 15 : 0), 6.5 * e(t, .4 + i * .1, .9 + i * .1), { fill: BLUE, stroke: INK, sw: 1.5, op: 1 - .6 * e(t, 7.0, 7.8) }); });
+    // five-number summary, then the box
+    const marks = [[mn, "min", 2.0], [q1, "Q1", 2.8], [md, "median", 3.6], [q3, "Q3", 4.4], [mxv, "max", 5.2]];
+    marks.forEach(([v, nmx, t0], i) => {
+      const a = e(t, t0, t0 + .5), ny = i % 2 ? 158 : 196;
+      w += L(X(v), ny + 30, X(v), 310, { stroke: ORANGE, sw: 3, op: a }) + T(X(v), ny + 24, nmx, { size: 20, w: 800, fill: ORANGE, op: a }) + T(X(v), ny, v, { size: 22, w: 800, mono: true, op: a });
+    });
+    const bx = e(t, 6.0, 7.2);
+    w += R(X(q1), 232, (X(q3) - X(q1)) * bx, 76, { fill: BLUE, op: .3 }) + R(X(q1), 232, (X(q3) - X(q1)) * bx, 76, { fill: "none", stroke: INK, sw: 3 });
+    w += L(X(md), 232, X(md), 308, { stroke: INK, sw: 5, op: bx }) + L(X(mn), 270, X(q1), 270, { stroke: INK, sw: 3, op: bx }) + L(X(q3), 270, X(mxv), 270, { stroke: INK, sw: 3, op: bx });
+    w += T(300, 128, "Five-number summary: min, Q1, median, Q3, max", { size: 21, w: 700, fill: GRAY, op: e(t, 1.4, 2.0) * (1 - e(t, 6.0, 6.5)) });
+    w += T(300, 128, "Boxplot: the box spans Q1 to Q3", { size: 21, w: 700, fill: GRAY, op: e(t, 6.2, 6.8) * (1 - e(t, 12.0, 12.5)) });
+    w += T(300, 440, "IQR = Q3 − Q1 = 26 − 18 = 8", { size: 24, w: 800, fill: ORANGE, op: e(t, 7.6, 8.3) * (1 - e(t, 13.4, 13.9)) });
+    // fences: add an outlier at 52
+    const fy = e(t, 9.6, 10.4);
+    w += L(X(q3 + 1.5 * 8), 220, X(q3 + 1.5 * 8), 320, { stroke: ORANGE, sw: 3, dash: "7 6", op: fy });
+    w += T(X(38) + 10, 226, "fence = 38", { size: 20, w: 800, fill: ORANGE, anchor: "start", op: fy });
+    w += C(X(52), ay - 12, 7 * e(t, 10.6, 11.4), { fill: ORANGE, stroke: INK, sw: 2 });
+    w += T(300, 476, "A value beyond a fence is an outlier", { size: 21, w: 800, op: e(t, 11.4, 12.0) * (1 - e(t, 13.4, 13.9)) });
+    let s = wrap(w, e(t, 13.4, 14.1));
+    // mean versus median
+    if (t > 13.8) {
+      s += T(300, 128, "Mean and median show skew", { size: 22, w: 700, fill: GRAY, op: e(t, 14.2, 14.8) });
+      sk.forEach(([nm, fn, mu, me, txt], k) => {
+        const cx = 100 + k * 200, a = e(t, 14.6 + k * .9, 15.4 + k * .9), mxf = Math.max(...Array.from({ length: 41 }, (_, i) => fn(i / 40)));
+        let dd = "M" + (cx - 80) + " 330"; for (let i = 0; i <= 40; i++) dd += "L" + (cx - 80 + i * 4).toFixed(1) + " " + (330 - fn(i / 40) / mxf * 130).toFixed(1); dd += "L" + (cx + 80) + " 330Z";
+        s += P(dd, { fill: BLUE, stroke: INK, sw: 2.5, op: a * .55 }) + L(cx - 86, 330, cx + 86, 330, { sw: 2.5, op: a });
+        const xm = cx - 80 + mu * 160, xd = cx - 80 + me * 160;
+        s += L(xm, 190, xm, 330, { stroke: ORANGE, sw: 4, op: a }) + L(xd, 190, xd, 330, { stroke: INK, sw: 4, dash: "6 5", op: a });
+        s += T(cx, 360, nm, { size: 21, w: 800, op: a }) + T(cx, 392, txt, { size: 20, w: 700, fill: GRAY, op: a });
+      });
+      s += T(150, 190, "", { size: 20 });
+      s += T(300, 450, "The mean is pulled toward the longer tail", { size: 22, w: 800, op: e(t, 18.2, 18.9) });
+      s += T(300, 486, "solid: mean    dashed: median", { size: 20, w: 600, fill: GRAY, op: e(t, 18.2, 18.9) });
+    }
+    return s;
+  } };
+})(K);
+  var qs = location.search;
+  if (/transparent/.test(qs)) document.documentElement.classList.add("transparent");
+  var svg = document.getElementById("s");
+  K.TH.onchange = function (p) { try { document.documentElement.style.setProperty("--surface", p.surface); } catch (e) { } };
+  K.TH.onchange(K.TH.pal); K.TH.watch();
+  function draw(t) {
+    K.TH.poll();
+    var a = K.clamp(t / 0.2) * (1 - K.clamp((t - (DUR - 0.4)) / 0.4));
+    svg.innerHTML = K.resolve('<g opacity="' + a.toFixed(3) + '">' +
+      K.T(300, 56, META.title, { size: 30, w: 700 }) + K.T(300, 88, META.sub, { size: 20, w: 500, fill: K.GRAY }) +
+      scene.frame(t) +
+      K.T(588, 592, "AP Stats " + META.id, { size: 14, w: 500, fill: "@muted", anchor: "end" }) + '</g>');
+  }
+  var tm = qs.match(/[?&]t=([0-9.]+)/);
+  if (tm) { draw(parseFloat(tm[1])); return; }
+  if (/still/.test(qs) || (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches)) { draw(META.still); return; }
+  // Playback state: clock = time on the animation timeline. speed can be changed at any moment.
+  var clock = 0, last = null, playing = true, speed = 1;
+  var sm = qs.match(/[?&]speed=([0-9.]+)/); if (sm) speed = parseFloat(sm[1]) || 1;
+  function frame(now) {
+    if (last !== null && playing) clock = (clock + (now - last) / 1000 * speed) % DUR;
+    last = now; draw(clock); requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  // Hooks for a future control bar (or a parent page): window.anim.setSpeed(0.5), .pause(), .play(), .seek(3.2)
+  window.anim = {
+    time: function () { return clock; }, chapters: [{"id":"summary","t":0.3,"rest":5.6},{"id":"boxplot","t":6,"rest":9},{"id":"outlier","t":9.6,"rest":12.4},{"id":"skew","t":14.2,"rest":19}],
+    setSpeed: function (v) { speed = v; }, getSpeed: function () { return speed; },
+    play: function () { playing = true; }, pause: function () { playing = false; },
+    seek: function (v) { clock = ((v % DUR) + DUR) % DUR; }, duration: DUR
+  };
+  document.getElementById("card").addEventListener("click", function () { playing = !playing; });
+})();
+</script>
+</body>
+</html>
