@@ -488,9 +488,24 @@ function cedAnimBlock(root) {
 var reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
 var tops=[].slice.call(document.querySelectorAll('.ced-topic')),links={};
 [].forEach.call(document.querySelectorAll('.ced-toc a'),function(a){links[a.getAttribute('data-t')]=a;});
+var cancelled=false,gen=0;
+['wheel','touchstart','keydown','mousedown'].forEach(function(n){window.addEventListener(n,function(){cancelled=true;},{passive:true});});
+function topOf(el){return el.getBoundingClientRect().top+(window.pageYOffset||document.documentElement.scrollTop)-18;}
+/* Glide to a topic (its heading, with the first animation block right under it). The target is measured on every frame and for 2.5 s after the glide,
+   because images, step lists and animation frames above it keep changing the page height while they load; any wheel, touch or key press stops it. */
 function go(id,smooth){var el=document.getElementById('t'+id);if(!el)return;
-  el.scrollIntoView({behavior:smooth&&!reduce?'smooth':'auto',block:'start'});
-  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');}
+  var my=++gen,s0=window.pageYOffset||document.documentElement.scrollTop,t0=null,settleUntil=0;cancelled=false;
+  var dur=(smooth&&!reduce)?Math.min(900,350+Math.abs(topOf(el)-s0)*.08):0;
+  el.classList.remove('flash');void el.offsetWidth;el.classList.add('flash');
+  function step(now){
+    if(my!==gen||cancelled)return;
+    if(t0===null)t0=now;
+    var p=dur?Math.min(1,(now-t0)/dur):1,k=p<.5?4*p*p*p:1-Math.pow(-2*p+2,3)/2,y=topOf(el);
+    window.scrollTo(0,Math.round(s0+(y-s0)*k));
+    if(p<1){requestAnimationFrame(step);return;}
+    if(!settleUntil)settleUntil=now+2500;
+    if(now<settleUntil)requestAnimationFrame(step);}
+  requestAnimationFrame(step);}
 [].forEach.call(links?Object.keys(links):[],function(k){links[k].addEventListener('click',function(e){
   e.preventDefault();go(k,true);try{history.replaceState(null,'','#'+k);}catch(_){}});});
 if('IntersectionObserver' in window){var io=new IntersectionObserver(function(es){es.forEach(function(e){
@@ -501,7 +516,7 @@ var h=decodeURIComponent(location.hash.slice(1));
 if(h&&document.getElementById('t'+h)){
   try{history.scrollRestoration='manual';}catch(_){}
   window.scrollTo(0,0);
-  setTimeout(function(){go(h,true);},400);
+  setTimeout(function(){go(h,false);},150);
 }
 })();
 </script></body></html>
