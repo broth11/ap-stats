@@ -139,6 +139,10 @@ a.chip{color:inherit;text-decoration:none}a.chip:hover,.stds dt a:hover{backgrou
 .xgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;margin-top:14px}
 
 .tx{white-space:pre-line}.tx .katex{font-size:1.04em}
+
+/* Lesson header at least as tall as the QR code, so the files and links start below it (22/11/2026) */
+.card-top,.lr-head{min-height:104px}
+@media(max-width:760px){.card-top,.lr-head{min-height:85px}}
 </style></head>
 <body>
 <div class="topbar"><div class="topbar-in"><span class="course">AP Statistics</span><nav aria-label="Units"><button type="button" class="u on" data-href="unit-1.html">1</button><button type="button" class="u " data-href="unit-2.html">2</button><button type="button" class="u " data-href="unit-3.html">3</button><button type="button" class="u " data-href="unit-4.html">4</button><button type="button" class="u " data-href="unit-5.html">5</button></nav></div></div>

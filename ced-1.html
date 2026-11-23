@@ -137,6 +137,10 @@ a.chip{color:inherit;text-decoration:none}a.chip:hover,.stds dt a:hover{backgrou
 
 .tx{white-space:pre-line}.tx .katex{font-size:1.04em}
 
+/* Lesson header at least as tall as the QR code, so the files and links start below it (22/11/2026) */
+.card-top,.lr-head{min-height:104px}
+@media(max-width:760px){.card-top,.lr-head{min-height:85px}}
+
 :root{--ced-a:#4b5cff}
 .ced-hero{margin-bottom:26px;padding:20px 26px}.ced-hero h1{max-width:none;font-size:clamp(24px,3.6vw,38px);margin:6px 0 10px}
 .ced-toc a{background:#fff;border:2px solid var(--ink);box-shadow:2px 2px 0 var(--ink);margin-bottom:2px}
