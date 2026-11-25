@@ -153,6 +153,11 @@ button.chip{color:inherit;cursor:pointer}
 .stds dt .cedlink{color:inherit;display:block;width:100%;text-align:inherit;font:inherit;cursor:pointer}
 .stds dt .cedlink:hover{background:var(--blue);color:#fff}
 .fbtn{width:100%;text-align:left}
+/* lesson page: QR code in the title bar, Files box right under it */
+.s-head.sq{grid-template-columns:auto 1fr auto}
+.s-head.sq .qr{position:static;width:83px;height:83px}
+.sheet #s-files{margin-bottom:30px}
+@media(max-width:860px){.s-head.sq{grid-template-columns:auto 1fr}.s-head.sq .qr{grid-column:1/-1;justify-self:start}}
 </style></head>
 <body>
 <div class="topbar"><div class="topbar-in"><button type="button" class="course" data-href="index.html">AP Statistics</button><nav aria-label="Parts" class="nine"><button type="button" class="u" data-href="unit-1a.html">1A</button><button type="button" class="u" data-href="unit-1b.html">1B</button><button type="button" class="u" data-href="unit-2a.html">2A</button><button type="button" class="u on" data-href="unit-2b.html">2B</button><button type="button" class="u" data-href="unit-3a.html">3A</button><button type="button" class="u" data-href="unit-3b.html">3B</button><button type="button" class="u" data-href="unit-4a.html">4A</button><button type="button" class="u" data-href="unit-4b.html">4B</button><button type="button" class="u" data-href="unit-5.html">5</button></nav></div></div>
@@ -228,13 +233,13 @@ function sheet(){
    '<div class="sheet-bar"><button type="button" class="back" data-go="#'+(state.lens==='overview'?'':state.lens)+'">&larr; '+esc(D.back||('Unit '+D.unit+' '+D.title))+'</button><span class="pager">'+
    (pv?'<button type="button" data-go="#'+pv.id+'" title="'+esc(pv.title)+'">&lsaquo; '+esc(pv.code)+'</button>':'<span class="off">&lsaquo;</span>')+
    (nx?'<button type="button" data-go="#'+nx.id+'" title="'+esc(nx.title)+'">'+esc(nx.code)+' &rsaquo;</button>':'<span class="off">&rsaquo;</span>')+'</span></div>'+
-   '<header class="s-head">'+numCell(l)+'<div><span class="code-tag">Lesson '+esc(l.code)+' · '+esc(l.partTitle)+'</span><h2>'+fmt(l.title)+'</h2></div></header>'+
+   '<header class="s-head sq">'+numCell(l)+'<div><span class="code-tag">Lesson '+esc(l.code)+' · '+esc(l.partTitle)+'</span><h2>'+fmt(l.title)+'</h2></div>'+qrBtn(l)+'</header>'+
+   '<section class="sec'+(state.section==='files'?' focus':'')+'" id="s-files">'+cols(l)+'</section>'+
    '<div class="s-grid"><div class="s-main">'+
    '<section class="sec"><h3>Summary</h3><p>'+fmt(l.summary)+'</p></section>'+
    '<div class="quad">'+sec('understandings',list(l.understandings))+sec('misconceptions',list(l.misconceptions))+sec('processes',list(l.processes))+sec('exam',list(l.exam))+'</div>'+
    sec('skills',list(l.skills))+'</div>'+
    '<aside class="s-side">'+sec('standards',std(l))+'</aside></div>'+
-   '<section class="sec'+(state.section==='files'?' focus':'')+'" id="s-files">'+cols(l)+'</section>'+
    '</div></div>';
 }
 function draw(){
